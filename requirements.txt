@@ -1,0 +1,17 @@
+PyMuPDF
+openai
+tiktoken
+python-dotenv
+chromadb
+rank-bm25
+PyYAML
+
+# --- Agent Dependencies ---
+langchain
+langgraph
+langchain_openai
+fastapi
+uvicorn[standard]
+sse-starlette
+python-multipart
+networkx

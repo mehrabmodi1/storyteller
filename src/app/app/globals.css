@@ -1,0 +1,17 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 255, 255, 255; /* White text */
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background-color: #030712; /* A very dark gray (gray-950) */
+}
+
+/* Add a class for our main container for consistent padding */
+.main-container {
+  @apply container mx-auto px-4 sm:px-6 lg:px-8;
+}
