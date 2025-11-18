@@ -86,8 +86,10 @@ Follow these steps to set up and run the Storyteller project on your local machi
     ```
     OPENAI_API_KEY="your-key-here"
     ```
+5. **Database**
+    Make sure you have the database in `data` directory at the root level of the project. Please contact the maintainer for the database or you can choose to build your own database using your preferred data.
 
-5.  **Run the Backend Server:**
+6.  **Run the Backend Server:**
     From the project root, run the following command:
     ```bash
     python -m uvicorn src.agent.server:app --reload
