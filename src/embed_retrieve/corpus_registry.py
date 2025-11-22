@@ -82,7 +82,7 @@ class CorpusRegistry:
             collection_name="mahabharata_chunks",
             cache_dir="data/processed_chunks",  # Use existing flat structure
             bm25_index_path="data/bm25_index.pkl",  # Use existing BM25 index path
-            chroma_db_path="data/chroma_db/mahabharata", # Default for default corpus
+            chroma_db_path="data/chroma_db", # Default for default corpus
             is_active=True,
             created_at=datetime.now().isoformat(),
             last_processed=datetime.now().isoformat()

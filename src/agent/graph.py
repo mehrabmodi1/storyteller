@@ -2,7 +2,7 @@ from langgraph.graph import StateGraph, END
 from langchain_core.messages import HumanMessage
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.pydantic_v1 import BaseModel, Field
+from pydantic import BaseModel, Field
 from typing import List, AsyncGenerator
 from dotenv import load_dotenv
 import networkx as nx
@@ -13,6 +13,7 @@ import asyncio
 from datetime import datetime
 import json
 from openai import AsyncOpenAI
+from pathlib import Path
 import os
 
 # Load environment variables from .env file at the start
@@ -31,8 +32,10 @@ from ..embed_retrieve.retriever import HybridRetriever
 # This uses the OPENAI_API_KEY from the .env file automatically
 client = AsyncOpenAI()
 
-# Load personas from the JSON file at startup
-with open("src/agent/personas.json", "r") as f:
+_current_dir = Path(__file__).parent
+_personas_path = _current_dir / "personas.json"
+
+with open(_personas_path, "r") as f:
     PERSONAS_DATA = {p["name"]: p for p in json.load(f)}
 
 # --- Pydantic Models for Structured Output ---

@@ -7,6 +7,7 @@ import asyncio
 import json
 import networkx as nx
 from datetime import datetime
+from pathlib import Path
 
 # Import the compiled agent from our graph file
 from .graph import story_agent,  list_saved_graphs, load_graph_from_file
@@ -32,7 +33,12 @@ STORY_GRAPH = nx.DiGraph()
 GRAPH_LOCK = asyncio.Lock()
 
 # Load personas from the JSON file at startup
-with open("src/agent/personas.json", "r") as f:
+
+# Get the directory where this file is located
+_current_dir = Path(__file__).parent
+_personas_path = _current_dir / "personas.json"
+
+with open(_personas_path, "r") as f:
     PERSONAS = json.load(f)
 
 @app.get("/api/personas")
