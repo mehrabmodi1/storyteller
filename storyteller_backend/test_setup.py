@@ -82,7 +82,11 @@ def test_imports():
     
     # Test services import
     try:
-        from services import AuthService, get_openai_client, JourneyManager, get_journey_manager
+        from services import (
+            AuthService, get_openai_client,
+            JourneyManager, get_journey_manager,
+            ImageGenerator, get_image_generator
+        )
         tests_passed &= print_test("Import: services", True, "All services accessible")
     except Exception as e:
         tests_passed &= print_test("Import: services", False, str(e))
@@ -271,6 +275,29 @@ def test_journey_manager():
         return print_test("Journey Manager", False, str(e))
 
 
+def test_image_generator():
+    """Test that image generator initializes correctly."""
+    try:
+        from services import get_image_generator
+        
+        # Test image generator instantiation
+        generator = get_image_generator()
+        assert generator is not None, "Failed to create image generator"
+        assert generator.enable_generation == True, "Image generation not enabled"
+        assert generator.client is not None, "OpenAI client not initialized"
+        
+        # Check if Azure is configured
+        azure_status = "enabled" if generator.use_azure_storage else "disabled"
+        
+        return print_test(
+            "Image Generator",
+            True,
+            f"Image generator initialized (Azure: {azure_status})"
+        )
+    except Exception as e:
+        return print_test("Image Generator", False, str(e))
+
+
 def main():
     """Run all tests."""
     print("=" * 60)
@@ -318,6 +345,11 @@ def main():
     # Test 8: Journey Manager
     print("8. Testing Journey Manager...")
     all_passed &= test_journey_manager()
+    print()
+    
+    # Test 9: Image Generator
+    print("9. Testing Image Generator...")
+    all_passed &= test_image_generator()
     print()
     
     # Summary

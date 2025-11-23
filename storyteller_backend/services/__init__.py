@@ -10,13 +10,17 @@ This package contains:
 - story_agent: Main LangGraph agent for story generation
 """
 
-from .auth_service import AuthService, get_openai_client
+from .auth_service import AuthService, get_openai_client, get_async_openai_client
 from .journey_manager import JourneyManager, get_journey_manager
+from .image_generator import ImageGenerator, get_image_generator
 
 __all__ = [
     "AuthService",
     "get_openai_client",
+    "get_async_openai_client",
     "JourneyManager",
     "get_journey_manager",
+    "ImageGenerator",
+    "get_image_generator",
 ]
 
