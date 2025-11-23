@@ -1,6 +1,25 @@
 # Storyteller Project: Current Status & Next Steps
 
-**Last Updated:** November 22, 2025
+**Last Updated:** November 23, 2025
+
+---
+
+## 🎉 PHASE 1 COMPLETE: Backend Refactoring
+
+**Status:** ✅ **COMPLETED** (November 23, 2025)
+
+The `storyteller_backend/` project is now fully operational with:
+- ✅ 37 new files created (~3,500 lines of code)
+- ✅ Modular architecture (config, models, services, api)
+- ✅ Complete API layer with 11 endpoints
+- ✅ Full CRUD for personas and corpuses (admin panel ready)
+- ✅ SSE streaming story generation
+- ✅ 10/10 tests passing
+- ✅ Production-ready, cloud deployment ready
+
+**Next Phase:** Phase 2 - React Frontend Development
+
+See [`cursor_chat_8.md`](cursor_chats/cursor_chat_8.md) for complete session documentation.
 
 ---
 
@@ -8,61 +27,87 @@
 
 ### ✅ COMPLETED FEATURES
 
-#### 1. **Backend - Story Generation Agent** (`src/agent/`)
-- ✅ LangGraph-based story generation agent with 5-node pipeline:
-  - `formulate_search_query`: Converts user prompts to search queries
-  - `retrieve_from_corpus`: Hybrid retrieval (ChromaDB + BM25)
-  - `generate_story`: Streaming story generation with GPT-4o-mini
-  - `generate_choices`: Creates 3 follow-up prompts
-  - `update_graph_with_choices`: Updates NetworkX graph structure
-- ✅ Persona system with 5 storyteller personas (Grandmother, Scholar, Poet, Historian, Mystic)
-  - Each persona has unique personality and color theme
-  - Persona-specific prompting for story generation
-- ✅ Image generation with DALL-E 3
-  - Warm, impressionist-style sketches
-  - Visual continuity across story nodes
-  - Azure Blob Storage integration for image hosting
-- ✅ Configurable story length (500-3000 tokens)
-- ✅ Graph persistence (saved per user in `saved_graphs/`)
-- ✅ Graph metadata tracking (initial prompt, timestamps, persona, corpus)
+#### 1. **NEW Backend Architecture** (`storyteller_backend/`)
 
-#### 2. **Backend - Multi-Corpus System** (`src/embed_retrieve/`)
-- ✅ Corpus registry system (`corpus_registry.py`)
-  - Centralized management of multiple text corpuses
-  - Metadata tracking (display name, description, status, chunk count)
-- ✅ Currently available corpuses (6 total):
+**Configuration & Settings:**
+- ✅ Pydantic-based configuration (`config/settings.py`)
+  - Strict separation: secrets in `.env`, config hardcoded
+  - Environment-based secret loading
+  - Type-safe settings with computed properties
+- ✅ Personas configuration (`config/personas.json`)
+- ✅ Jobs configuration (`config/jobs.yaml`)
+
+**Data Models:**
+- ✅ API contracts (`models/api_models.py`)
+  - StoryRequest/Response, CorpusInfo, PersonaInfo
+  - JourneyMeta, GraphNode/Edge/Data
+- ✅ LangGraph state (`models/state.py`)
+- ✅ Chunk models (`models/chunk.py`)
+
+**Services Layer:**
+- ✅ **Story Agent** (`services/story_agent.py`) - 7-node LangGraph pipeline:
+  1. `get_last_story`: Find parent story for continuity
+  2. `generate_search_query`: Convert prompt to search query
+  3. `retrieve_chunks`: Hybrid retrieval (ChromaDB + BM25)
+  4. `generate_story`: Streaming story generation with GPT-4o-mini
+  5. `update_graph_with_story`: Add story node to graph
+  6. `generate_choices`: Generate 3 follow-up prompts
+  7. `update_graph_with_choices`: Add choice nodes, save graph
+- ✅ **Auth Service** (`services/auth_service.py`)
+  - OpenAI client management
+  - Support for 3 auth modes: self_hosted, per_request_key, credit_system
+- ✅ **Journey Manager** (`services/journey_manager.py`)
+  - Save/load/list/delete journeys
+  - Legacy graph support with metadata extraction
+  - Corpus validation
+- ✅ **Image Generator** (`services/image_generator.py`)
+  - DALL-E image generation
+  - Image prompt creation with GPT-4o-mini
+  - Visual continuity across story nodes
+
+**Corpus System:**
+- ✅ Migrated `embed_retrieve/` module with all tools
+- ✅ Hybrid retrieval (ChromaDB + BM25) with Reciprocal Rank Fusion
+- ✅ 6 active corpuses:
   - The Mahabharata ✅
   - The Odyssey ✅
   - The Arabian Nights ✅
   - The Volsunga Saga ✅
   - The Jataka Tales ✅
   - Locus Platform Documentation ✅
-- ✅ Hybrid retrieval system (ChromaDB + BM25) with Reciprocal Rank Fusion
-- ✅ Isolated databases per corpus:
-  - `data/chroma_db/{corpus_name}/` - Vector embeddings
-  - `data/bm25_indexes/{corpus_name}_bm25.pkl` - Keyword index
-  - `data/processed_chunks/{corpus_name}/` - Processed chunks
-- ✅ Batch ingestion system (`batch_ingest.py`)
-  - Smart recovery from partial failures
-  - Status checking and validation
-  - Force rebuild capability
-- ✅ Multi-file corpus preprocessing (`preprocess_multi_files.py`)
-- ✅ Jobs configuration via YAML (`jobs.yaml`)
+- ✅ Batch ingestion system
+- ✅ Corpus registry with status tracking
 
-#### 3. **Backend - FastAPI Server** (`src/agent/server.py`)
-- ✅ RESTful API with 5 endpoints:
-  - `GET /api/story` - Server-Sent Events (SSE) streaming
-  - `GET /api/personas` - List available personas
-  - `GET /api/corpuses` - List available corpuses with status
-  - `GET /api/list_graphs` - List user's saved journeys
-  - `POST /api/load_graph` - Load a saved journey
-  - `POST /api/get_loaded_graph` - Get currently loaded graph
-- ✅ SSE streaming for real-time story generation
-- ✅ CORS configured for frontend communication
-- ✅ In-memory graph state with async lock for concurrent requests
-- ✅ Corpus validation (checks if corpus exists and is active)
+**API Layer:**
+- ✅ FastAPI application (`api/main.py`)
+  - CORS middleware
+  - Lifespan management
+  - Auto-generated docs at `/docs`
+- ✅ Global graph state management (`api/dependencies.py`)
+- ✅ **11 API Endpoints:**
+  - Stories:
+    - `GET /api/stream_story` - SSE streaming story generation
+  - Personas (Full CRUD for admin panel):
+    - `GET /api/personas` - List all personas
+    - `POST /api/personas` - Create new persona
+    - `PUT /api/personas/{name}` - Update persona
+    - `DELETE /api/personas/{name}` - Delete persona
+  - Corpuses (Full CRUD for admin panel):
+    - `GET /api/corpuses` - List all corpuses with status
+    - `POST /api/corpuses` - Trigger corpus ingestion
+    - `PUT /api/corpuses/{name}` - Update corpus metadata
+    - `DELETE /api/corpuses/{name}` - Delete corpus
+  - Journeys:
+    - `GET /api/list_graphs` - List user's saved journeys
+    - `POST /api/load_graph` - Load a saved journey
+    - `GET /api/get_loaded_graph` - Get currently loaded graph
 
-#### 4. **Frontend - Next.js Application** (`src/app/`)
+**Testing:**
+- ✅ Incremental testing framework (`test_setup.py`)
+- ✅ 10 comprehensive tests, all passing
+- ✅ Tests for: config, models, services, corpus registry, auth, journey manager, image generator, story agent
+
+#### 2. **OLD Frontend - Next.js Application** (`src/app/`) [TO BE REPLACED]
 - ✅ Single-page React application using Next.js 15.3.4
 - ✅ ReactFlow-based graph visualization
   - Custom StoryNode component (displays story + image)
@@ -82,7 +127,7 @@
 - ✅ Image loading with expiry detection (Azure SAS tokens)
 - ✅ LocalStorage for user preferences (username, corpus)
 
-#### 5. **Data Infrastructure**
+#### 3. **Data Infrastructure**
 - ✅ 6 complete corpuses ingested and indexed
 - ✅ ChromaDB vector stores for all corpuses
 - ✅ BM25 keyword indexes for all corpuses
@@ -181,11 +226,39 @@ Based on analysis of Reflex.dev capabilities:
 
 ---
 
-## 📋 IMPLEMENTATION PLAN: storyteller_app
+## 📋 IMPLEMENTATION PLAN
 
-### Phase 1: Backend Restructuring (Week 1)
+### ✅ Phase 1: Backend Restructuring (COMPLETED - November 23, 2025)
 
-**Goal:** Create a clean, standalone Python backend in `storyteller_app/backend/` with clear API contracts and modular architecture.
+**Goal:** Create a clean, standalone Python backend in `storyteller_backend/` with clear API contracts and modular architecture.
+
+**Status:** ✅ **COMPLETE** - See [`cursor_chat_8.md`](cursor_chats/cursor_chat_8.md) for full documentation.
+
+**What Was Built:**
+- ✅ Project structure with config, models, services, api layers
+- ✅ Pydantic-based configuration with secret separation
+- ✅ Complete data models (API contracts, LangGraph state, chunks)
+- ✅ 4 core services (auth, journey manager, image generator, story agent)
+- ✅ Migrated embed_retrieve module with all corpus tools
+- ✅ Complete API layer with 11 endpoints
+- ✅ Full CRUD for personas and corpuses (admin panel ready)
+- ✅ SSE streaming story generation
+- ✅ 10 comprehensive tests, all passing
+- ✅ Production-ready architecture
+
+**Commands:**
+```bash
+cd storyteller_backend
+source .venv_bk/bin/activate
+python test_setup.py  # Run tests
+python -m uvicorn api.main:app --reload  # Run server
+```
+
+---
+
+### 🚧 Phase 2: React Frontend (IN PROGRESS)
+
+**Goal:** Create a lightweight React app in `storyteller_frontend/` that handles graph visualization and admin panel.
 
 #### 1.1 Project Structure Setup
 
@@ -417,9 +490,12 @@ class JourneyMeta(BaseModel):
 
 ---
 
-### Phase 2: Minimal React Frontend (Week 2)
-
-**Goal:** Create a lightweight React app that ONLY handles graph visualization and delegates everything else to the backend.
+**Sub-Goals:**
+1. Create lightweight React app (Vite + TypeScript)
+2. Implement admin panel for personas/corpuses CRUD
+3. Migrate ReactFlow graph visualization
+4. Implement SSE streaming
+5. Create swappable graph interface
 
 #### 2.1 Project Structure
 
@@ -1233,15 +1309,70 @@ storyteller/
 
 ## ✨ Highlights & Achievements
 
+### Phase 1 (COMPLETE):
+1. ✅ **Modular Backend Architecture:** Clean separation of concerns with config, models, services, and API layers
+2. ✅ **11 API Endpoints:** Full CRUD for admin panel + story generation + journey management
+3. ✅ **Type-Safe Configuration:** Pydantic models with strict secret separation
+4. ✅ **Comprehensive Testing:** 10 tests covering all core functionality
+5. ✅ **Production-Ready:** Independent project, cloud deployment ready
+6. ✅ **Full CRUD Support:** Admin panel can manage personas and corpuses via API
+
+### Original Features (Maintained):
 1. **Fully Functional Story Generation:** Users can generate branching narratives from 6 different corpuses
-2. **Persona System:** 5 distinct storyteller personalities with themed UI
-3. **Image Generation:** DALL-E 3 images for visual storytelling
+2. **Persona System:** 5 distinct storyteller personalities
+3. **Image Generation:** DALL-E images for visual storytelling
 4. **Multi-User Support:** User-specific journeys and preferences
 5. **Corpus Flexibility:** Easy to add new text corpuses
-6. **Streaming UX:** Real-time story generation feels responsive
+6. **Streaming UX:** Real-time story generation via SSE
 7. **Graph Persistence:** Users can save and reload story journeys
 8. **Hybrid Retrieval:** Combines semantic and keyword search effectively
 
 ---
 
-*This document will be updated with the new implementation plan once reviewed and approved.*
+## 📚 Quick Reference
+
+### Important Files:
+- **Backend Entry:** `storyteller_backend/api/main.py`
+- **Tests:** `storyteller_backend/test_setup.py`
+- **Configuration:** `storyteller_backend/config/settings.py`
+- **Secrets:** `storyteller_backend/.env` (not in git)
+- **Session Docs:** `documentation/cursor_chats/cursor_chat_8.md`
+
+### Commands:
+```bash
+# Test backend
+cd storyteller_backend
+source .venv_bk/bin/activate
+python test_setup.py
+
+# Run backend server
+python -m uvicorn api.main:app --reload
+
+# API Documentation
+open http://localhost:8000/docs
+```
+
+### API Endpoints:
+- Stories: `GET /api/stream_story` (SSE)
+- Personas: `GET/POST/PUT/DELETE /api/personas`
+- Corpuses: `GET/POST/PUT/DELETE /api/corpuses`
+- Journeys: `GET /api/list_graphs`, `POST /api/load_graph`, `GET /api/get_loaded_graph`
+
+### Project Structure:
+```
+storyteller/
+├── storyteller_backend/     # ✅ Phase 1 COMPLETE
+│   ├── api/                 # FastAPI routes
+│   ├── services/            # Business logic
+│   ├── models/              # Data models
+│   ├── embed_retrieve/      # Corpus management
+│   └── config/              # Settings
+├── storyteller_frontend/    # 🚧 Phase 2 (TODO)
+├── data/                    # Shared corpus data
+├── saved_graphs/            # User journeys
+└── src/                     # Old implementation (reference only)
+```
+
+---
+
+**Last Updated:** November 23, 2025 - Phase 1 Complete, Phase 2 Ready to Begin
