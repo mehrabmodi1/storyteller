@@ -80,6 +80,13 @@ def test_imports():
     except Exception as e:
         tests_passed &= print_test("Import: embed_retrieve", False, str(e))
     
+    # Test services import
+    try:
+        from services import AuthService, get_openai_client, JourneyManager, get_journey_manager
+        tests_passed &= print_test("Import: services", True, "All services accessible")
+    except Exception as e:
+        tests_passed &= print_test("Import: services", False, str(e))
+    
     return tests_passed
 
 
@@ -218,6 +225,52 @@ def test_corpus_registry():
         return print_test("Corpus Registry", False, str(e))
 
 
+def test_auth_service():
+    """Test that auth service can create OpenAI clients."""
+    try:
+        from services import get_openai_client, AuthService
+        from config.settings import settings
+        
+        # Test auth service instantiation
+        auth_service = AuthService()
+        assert auth_service.auth_mode == "self_hosted", "Auth mode mismatch"
+        
+        # Test client creation (don't make actual API calls in tests)
+        client = get_openai_client()
+        assert client is not None, "Failed to create OpenAI client"
+        assert hasattr(client, "chat"), "Client missing chat attribute"
+        
+        return print_test(
+            "Auth Service",
+            True,
+            f"OpenAI client created (auth_mode: {settings.auth_mode})"
+        )
+    except Exception as e:
+        return print_test("Auth Service", False, str(e))
+
+
+def test_journey_manager():
+    """Test that journey manager can list saved graphs."""
+    try:
+        from services import get_journey_manager
+        
+        # Test journey manager instantiation
+        manager = get_journey_manager()
+        assert manager is not None, "Failed to create journey manager"
+        
+        # Test listing journeys for a test user (may be empty)
+        # We use a test username to avoid interfering with real data
+        journeys = manager.list_journeys("mehrab")
+        
+        return print_test(
+            "Journey Manager",
+            True,
+            f"Journey manager initialized ({len(journeys)} journey(s) found for mehrab)"
+        )
+    except Exception as e:
+        return print_test("Journey Manager", False, str(e))
+
+
 def main():
     """Run all tests."""
     print("=" * 60)
@@ -255,6 +308,16 @@ def main():
     # Test 6: Corpus Registry
     print("6. Testing Corpus Registry...")
     all_passed &= test_corpus_registry()
+    print()
+    
+    # Test 7: Auth Service
+    print("7. Testing Auth Service...")
+    all_passed &= test_auth_service()
+    print()
+    
+    # Test 8: Journey Manager
+    print("8. Testing Journey Manager...")
+    all_passed &= test_journey_manager()
     print()
     
     # Summary

@@ -162,10 +162,6 @@ class GraphNode(BaseModel):
         default=None,
         description="Story content (for story nodes)"
     )
-    isChoice: bool = Field(
-        default=False,
-        description="Whether this is a choice node"
-    )
     image_url: Optional[str] = Field(
         default=None,
         description="URL of generated image (for story nodes)"
