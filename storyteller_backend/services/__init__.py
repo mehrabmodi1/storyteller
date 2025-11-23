@@ -13,6 +13,7 @@ This package contains:
 from .auth_service import AuthService, get_openai_client, get_async_openai_client
 from .journey_manager import JourneyManager, get_journey_manager
 from .image_generator import ImageGenerator, get_image_generator
+from .story_agent import get_story_agent, create_story_agent
 
 __all__ = [
     "AuthService",
@@ -22,5 +23,7 @@ __all__ = [
     "get_journey_manager",
     "ImageGenerator",
     "get_image_generator",
+    "get_story_agent",
+    "create_story_agent",
 ]
 

@@ -38,7 +38,6 @@ def test_config():
         
         # Check computed properties
         assert hasattr(settings, 'data_path'), "Missing data_path property"
-        assert hasattr(settings, 'uses_azure_storage'), "Missing uses_azure_storage property"
         
         # Verify paths are Path objects
         assert isinstance(settings.data_path, Path), "data_path should be Path object"
@@ -85,7 +84,8 @@ def test_imports():
         from services import (
             AuthService, get_openai_client,
             JourneyManager, get_journey_manager,
-            ImageGenerator, get_image_generator
+            ImageGenerator, get_image_generator,
+            get_story_agent
         )
         tests_passed &= print_test("Import: services", True, "All services accessible")
     except Exception as e:
@@ -286,16 +286,35 @@ def test_image_generator():
         assert generator.enable_generation == True, "Image generation not enabled"
         assert generator.client is not None, "OpenAI client not initialized"
         
-        # Check if Azure is configured
-        azure_status = "enabled" if generator.use_azure_storage else "disabled"
-        
         return print_test(
             "Image Generator",
             True,
-            f"Image generator initialized (Azure: {azure_status})"
+            "Image generator initialized successfully"
         )
     except Exception as e:
         return print_test("Image Generator", False, str(e))
+
+
+def test_story_agent():
+    """Test that story agent can be created and has correct structure."""
+    try:
+        from services import get_story_agent
+        
+        # Test story agent creation
+        agent = get_story_agent()
+        assert agent is not None, "Failed to create story agent"
+        
+        # Check that it's a compiled LangGraph
+        assert hasattr(agent, 'invoke'), "Agent missing invoke method"
+        assert hasattr(agent, 'astream'), "Agent missing astream method"
+        
+        return print_test(
+            "Story Agent",
+            True,
+            "LangGraph agent compiled successfully"
+        )
+    except Exception as e:
+        return print_test("Story Agent", False, str(e))
 
 
 def main():
@@ -350,6 +369,11 @@ def main():
     # Test 9: Image Generator
     print("9. Testing Image Generator...")
     all_passed &= test_image_generator()
+    print()
+    
+    # Test 10: Story Agent
+    print("10. Testing Story Agent...")
+    all_passed &= test_story_agent()
     print()
     
     # Summary
