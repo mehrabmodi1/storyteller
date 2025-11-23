@@ -63,6 +63,23 @@ def test_imports():
     except Exception as e:
         tests_passed &= print_test("Import: config", False, str(e))
     
+    # Test models import
+    try:
+        from models import (
+            StoryRequest, CorpusInfo, PersonaInfo,
+            JourneyMeta, StorytellerState, Chunk
+        )
+        tests_passed &= print_test("Import: models", True, "All model classes accessible")
+    except Exception as e:
+        tests_passed &= print_test("Import: models", False, str(e))
+    
+    # Test embed_retrieve import
+    try:
+        from embed_retrieve import HybridRetriever, get_registry
+        tests_passed &= print_test("Import: embed_retrieve", True, "Retriever and registry accessible")
+    except Exception as e:
+        tests_passed &= print_test("Import: embed_retrieve", False, str(e))
+    
     return tests_passed
 
 
@@ -133,6 +150,74 @@ def test_data_directories():
         return print_test("Data Directories", False, str(e))
 
 
+def test_models():
+    """Test that Pydantic models work correctly."""
+    try:
+        from models import StoryRequest, CorpusInfo, PersonaInfo
+        
+        # Test StoryRequest validation
+        request = StoryRequest(
+            prompt="Tell me a story",
+            story_length=1500,
+            corpus_name="mahabharata"
+        )
+        assert request.prompt == "Tell me a story", "StoryRequest validation failed"
+        assert request.story_length == 1500, "Story length validation failed"
+        
+        # Test CorpusInfo creation
+        corpus = CorpusInfo(
+            name="test",
+            display_name="Test Corpus",
+            description="Test",
+            is_active=True,
+            chunk_count=100,
+            needs_rebuild=False
+        )
+        assert corpus.name == "test", "CorpusInfo creation failed"
+        
+        return print_test(
+            "Data Models",
+            True,
+            "Pydantic models validate correctly"
+        )
+    except Exception as e:
+        return print_test("Data Models", False, str(e))
+
+
+def test_corpus_registry():
+    """Test that corpus registry can load corpuses."""
+    try:
+        from embed_retrieve import get_registry
+        
+        registry = get_registry()
+        
+        # Check if registry has corpuses
+        corpuses = registry.list_corpuses()
+        if not corpuses:
+            return print_test(
+                "Corpus Registry",
+                False,
+                "No corpuses found. Run batch_ingest to create corpuses."
+            )
+        
+        # Check if mahabharata exists (default corpus)
+        mahabharata = registry.get_corpus("mahabharata")
+        if not mahabharata:
+            return print_test(
+                "Corpus Registry",
+                False,
+                "Mahabharata corpus not found"
+            )
+        
+        return print_test(
+            "Corpus Registry",
+            True,
+            f"Registry loaded with {len(corpuses)} corpus(es)"
+        )
+    except Exception as e:
+        return print_test("Corpus Registry", False, str(e))
+
+
 def main():
     """Run all tests."""
     print("=" * 60)
@@ -160,6 +245,16 @@ def main():
     # Test 4: Data Directories
     print("4. Testing Data Directories...")
     all_passed &= test_data_directories()
+    print()
+    
+    # Test 5: Data Models
+    print("5. Testing Data Models...")
+    all_passed &= test_models()
+    print()
+    
+    # Test 6: Corpus Registry
+    print("6. Testing Corpus Registry...")
+    all_passed &= test_corpus_registry()
     print()
     
     # Summary
