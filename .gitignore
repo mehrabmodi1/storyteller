@@ -1,4 +1,6 @@
 .venv/
+.venv_bk/
+.venv_fe/
 .env
 .DS_Store
 .cursor/

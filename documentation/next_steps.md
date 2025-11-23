@@ -190,48 +190,49 @@ Based on analysis of Reflex.dev capabilities:
 #### 1.1 Project Structure Setup
 
 ```
-storyteller_app/
-├── backend/
-│   ├── .venv/                      # Isolated virtual environment
-│   ├── requirements.txt            # Backend dependencies only
-│   ├── .env                        # Environment configuration
-│   ├── config/
+storyteller_backend/               # Independent backend project
+├── .venv/                         # Isolated virtual environment
+├── requirements.txt               # Backend dependencies
+├── .env                           # Environment configuration (gitignored)
+├── .env.example                   # Environment template
+├── README.md                      # Backend-specific documentation
+├── Dockerfile                     # For containerization (future)
+├── test_setup.py                  # Incremental testing script
+├── config/
+│   ├── __init__.py
+│   ├── settings.py                # Centralized config (Pydantic Settings)
+│   └── personas.json              # Persona definitions
+├── api/
+│   ├── __init__.py
+│   ├── main.py                    # FastAPI app entry point
+│   ├── routes/
 │   │   ├── __init__.py
-│   │   ├── settings.py            # Centralized config (Pydantic Settings)
-│   │   └── personas.json          # Persona definitions
-│   ├── api/
-│   │   ├── __init__.py
-│   │   ├── main.py                # FastAPI app entry point
-│   │   ├── routes/
-│   │   │   ├── __init__.py
-│   │   │   ├── story.py           # Story generation endpoints
-│   │   │   ├── personas.py        # Persona endpoints
-│   │   │   ├── corpuses.py        # Corpus endpoints
-│   │   │   └── journeys.py        # Journey management endpoints
-│   │   └── dependencies.py        # Shared dependencies (DB, retriever, etc.)
-│   ├── services/
-│   │   ├── __init__.py
-│   │   ├── story_agent.py         # LangGraph agent logic
-│   │   ├── retrieval.py           # Hybrid retriever
-│   │   ├── corpus_manager.py      # Corpus registry wrapper
-│   │   ├── journey_manager.py     # Journey save/load logic
-│   │   └── image_generator.py     # DALL-E integration
-│   ├── models/
-│   │   ├── __init__.py
-│   │   ├── state.py               # LangGraph state definitions
-│   │   ├── graph_data.py          # Graph structure models
-│   │   └── api_models.py          # Pydantic request/response models
-│   ├── utils/
-│   │   ├── __init__.py
-│   │   ├── graph_utils.py         # NetworkX helpers
-│   │   └── sse_utils.py           # SSE streaming helpers
-│   └── tests/
-│       ├── __init__.py
-│       ├── test_api.py
-│       ├── test_services.py
-│       └── test_retrieval.py
-├── frontend/                       # (Phase 2)
-└── README.md
+│   │   ├── story.py               # Story generation endpoints
+│   │   ├── personas.py            # Persona endpoints
+│   │   ├── corpuses.py            # Corpus endpoints
+│   │   └── journeys.py            # Journey management endpoints
+│   └── dependencies.py            # Shared dependencies (DB, retriever, etc.)
+├── services/
+│   ├── __init__.py
+│   ├── story_agent.py             # LangGraph agent logic
+│   ├── retrieval.py               # Hybrid retriever
+│   ├── corpus_manager.py          # Corpus registry wrapper
+│   ├── journey_manager.py         # Journey save/load logic
+│   └── image_generator.py         # DALL-E integration
+├── models/
+│   ├── __init__.py
+│   ├── state.py                   # LangGraph state definitions
+│   ├── graph_data.py              # Graph structure models
+│   └── api_models.py              # Pydantic request/response models
+├── utils/
+│   ├── __init__.py
+│   ├── graph_utils.py             # NetworkX helpers
+│   └── sse_utils.py               # SSE streaming helpers
+└── tests/
+    ├── __init__.py
+    ├── test_api.py
+    ├── test_services.py
+    └── test_retrieval.py
 ```
 
 #### 1.2 Configuration Management
@@ -239,7 +240,7 @@ storyteller_app/
 **Task:** Replace hard-coded values with environment-based configuration
 
 ```python
-# storyteller_app/backend/config/settings.py
+# storyteller_backend/config/settings.py
 from pydantic_settings import BaseSettings
 from typing import Optional
 
@@ -284,7 +285,7 @@ settings = Settings()
 **Task:** Break monolithic server into modular routes
 
 ```python
-# storyteller_app/backend/api/main.py
+# storyteller_backend/api/main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .routes import story, personas, corpuses, journeys
@@ -321,7 +322,7 @@ async def health_check():
 **Task:** Extract business logic from routes into services
 
 ```python
-# storyteller_app/backend/services/story_agent.py
+# storyteller_backend/services/story_agent.py
 """
 Encapsulates the LangGraph agent logic.
 Migrated from src/agent/graph.py with improvements.
@@ -359,7 +360,7 @@ class StoryAgent:
 **Task:** Define clear request/response contracts
 
 ```python
-# storyteller_app/backend/models/api_models.py
+# storyteller_backend/models/api_models.py
 from pydantic import BaseModel, Field
 from typing import Optional, List
 
@@ -423,11 +424,14 @@ class JourneyMeta(BaseModel):
 #### 2.1 Project Structure
 
 ```
-storyteller_app/frontend/
+storyteller_frontend/              # Independent frontend project (Phase 2)
 ├── package.json
 ├── tsconfig.json
-├── vite.config.ts              # Using Vite instead of Next.js (faster)
+├── vite.config.ts                # Using Vite instead of Next.js (faster)
 ├── .env.local
+├── .env.local.example            # Environment template
+├── README.md                     # Frontend-specific documentation
+├── Dockerfile                    # For containerization (future)
 ├── index.html
 ├── src/
 │   ├── main.tsx                # App entry point
@@ -801,19 +805,19 @@ def corpus_management() -> rx.Component:
 
 ```bash
 # 1. Create backend virtual environment
-cd storyteller_app/backend
+cd storyteller_backend
 python -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
 # 2. Copy .env file
-cp ../../.env .env
+cp ../.env .env
 
 # 3. Run backend (Phase 1)
 python -m uvicorn api.main:app --reload
 
 # 4. Setup frontend (Phase 2)
-cd ../frontend
+cd ../storyteller_frontend
 npm install
 npm run dev
 
@@ -826,11 +830,11 @@ npm run dev
 
 ```bash
 # Backend tests
-cd storyteller_app/backend
+cd storyteller_backend
 pytest tests/ -v --cov=api --cov=services
 
 # Frontend tests
-cd storyteller_app/frontend
+cd storyteller_frontend
 npm test
 
 # Integration tests
@@ -889,23 +893,250 @@ npm run test:integration
 
 ---
 
+## 🌐 Deployment & Authentication Strategy
+
+### Deployment Architecture Decision
+
+**Our architecture supports multiple deployment models:**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│              FLEXIBLE DEPLOYMENT OPTIONS                │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│  ✅ Current Focus: Self-Hosted (Phase 1)               │
+│  ┌──────────┐         ┌──────────┐                     │
+│  │ Frontend │ ◄─────► │ Backend  │                     │
+│  │ (Local)  │         │ (Local)  │                     │
+│  └──────────┘         └─────┬────┘                     │
+│                             │                           │
+│                             ├──► User's .env (API key)  │
+│                             └──► User's data/           │
+│                                                         │
+│  🔮 Future: Hosted Backend (Phase 2+)                  │
+│  ┌──────────┐         ┌──────────┐                     │
+│  │ Frontend │ ◄─────► │ Backend  │                     │
+│  │ (Local)  │         │ (Cloud)  │                     │
+│  └──────────┘         └──────────┘                     │
+│     Users configure: VITE_API_BASE_URL=your-domain.com │
+│                                                         │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Key Architectural Benefits
+
+**1. Frontend/Backend Separation**
+- Frontend can connect to ANY backend (local or deployed)
+- Configuration via environment variables
+- No code changes needed to switch deployment models
+
+```typescript
+// Frontend configuration (Vite)
+// .env.local
+VITE_API_BASE_URL=http://localhost:8000    # Development
+VITE_API_BASE_URL=https://api.your-domain  # Production
+
+// All API calls automatically use configured URL
+const response = await fetch(`${API_BASE_URL}/api/story`)
+```
+
+**2. Clear API Contracts**
+- FastAPI with OpenAPI documentation at `/docs`
+- Pydantic models ensure type safety
+- Easy to version and evolve
+
+**3. Multiple Deployment Paths**
+
+| Model | Users | Backend | Frontend | Use Case |
+|-------|-------|---------|----------|----------|
+| **Self-Hosted** ✅ | Technical users | Run locally | Run locally | Phase 1 (Current) |
+| **Hybrid** | Anyone | Cloud (optional) | Local or web | Phase 2+ (Future) |
+| **Full SaaS** | Anyone | Cloud (you manage) | Web app | Phase 3+ (Optional) |
+
+### Authentication Strategy
+
+**Phase 1 (Current): Self-Hosted Mode**
+
+```python
+# storyteller_backend/config/settings.py
+class Settings(BaseSettings):
+    # Users set their own API key in .env
+    openai_api_key: str  # Required in .env file
+    
+    # Authentication mode (for future expansion)
+    auth_mode: str = "self_hosted"  # Options: self_hosted, per_request_key, credit_system
+```
+
+**User setup:**
+```bash
+# User creates their own .env file
+echo "OPENAI_API_KEY=sk-user-key-here" > .env
+
+# Their key never leaves their machine
+# Maximum security and control
+```
+
+**Pros of Self-Hosted Auth:**
+- ✅ User maintains full control of API key
+- ✅ Key never transmitted over network
+- ✅ No trust required in external backend
+- ✅ No billing/payment infrastructure needed
+- ✅ Simplest to implement (Phase 1)
+
+**Cons:**
+- ❌ Requires technical users
+- ❌ Users must manage their own OpenAI account
+
+---
+
+### Future Authentication Options (Supported by Architecture)
+
+Our service layer design with dependency injection supports adding ANY authentication model later without refactoring:
+
+```python
+# storyteller_backend/services/auth_service.py
+class AuthService:
+    """
+    Handles different authentication modes.
+    Easy to extend without changing business logic!
+    """
+    def get_openai_client(
+        self,
+        user_provided_key: Optional[str] = None
+    ) -> AsyncOpenAI:
+        if settings.auth_mode == "self_hosted":
+            # Phase 1: Use key from .env
+            return AsyncOpenAI(api_key=settings.openai_api_key)
+        
+        elif settings.auth_mode == "per_request_key":
+            # Phase 2+: User sends key in header
+            if not user_provided_key:
+                raise HTTPException(401, "X-OpenAI-Key header required")
+            return AsyncOpenAI(api_key=user_provided_key)
+        
+        elif settings.auth_mode == "credit_system":
+            # Phase 3+: Platform manages key, users buy credits
+            return AsyncOpenAI(api_key=settings.platform_openai_key)
+```
+
+**Phase 2 Option: Per-Request Key**
+- User sends API key in HTTP header with each request
+- Backend never stores keys (stateless)
+- Works with deployed backend
+- User still controls their own OpenAI account
+
+**Phase 3 Option: Credit/Token System (SaaS)**
+- Users buy credits from you
+- You manage OpenAI relationship
+- Best UX (no OpenAI account needed)
+- Requires payment infrastructure (Stripe)
+
+---
+
+### Why This Architecture Works
+
+**1. Clean Service Layer**
+```python
+# Business logic doesn't care about auth details
+class StoryAgent:
+    def __init__(self, openai_client: AsyncOpenAI):  # Injected!
+        self.client = openai_client
+    
+    async def generate_story(self, prompt: str):
+        # Works regardless of how client was created
+        response = await self.client.chat.completions.create(...)
+```
+
+**2. Environment-Based Configuration**
+```python
+# Easy to switch modes without code changes
+AUTH_MODE=self_hosted        # Phase 1
+AUTH_MODE=per_request_key    # Phase 2
+AUTH_MODE=credit_system      # Phase 3
+```
+
+**3. CORS Configuration**
+```python
+# Backend accepts connections from anywhere
+cors_origins: list[str] = [
+    "http://localhost:3000",          # Local dev
+    "http://localhost:*",              # Any local port
+    "https://app.yourdomain.com",     # Future hosted frontend
+]
+```
+
+---
+
+### Migration Path
+
+```
+Phase 1 (Now - Week 1-2):
+├─ Implement self_hosted auth mode
+├─ Users run everything locally
+├─ Focus: Clean architecture & modularity
+└─ Goal: Feature parity with current app
+
+Phase 2 (Future - If deploying):
+├─ Deploy backend to cloud
+├─ Add per_request_key auth mode (optional)
+├─ Update CORS for production domain
+└─ Goal: Share with non-technical users
+
+Phase 3 (Future - If monetizing):
+├─ Implement credit_system auth mode
+├─ Add user authentication (JWT)
+├─ Integrate payment system (Stripe)
+└─ Goal: SaaS business model
+```
+
+---
+
+### Implementation Decisions for Phase 1
+
+**✅ Confirmed Decisions:**
+
+1. **Deployment:** Self-hosted (local backend + local frontend)
+2. **Authentication:** Self-hosted mode (user's .env file)
+3. **Target Users:** Technical users comfortable with Python/terminals
+4. **API Design:** Clean contracts that support future expansion
+5. **Service Layer:** Dependency injection allows swapping auth later
+
+**🔮 Deferred Decisions:**
+
+1. Cloud deployment strategy (Docker, AWS, etc.)
+2. Per-request authentication implementation
+3. Credit/billing system design
+4. Multi-tenancy and user management
+5. Frontend build tool (Vite vs Next.js) - leaning toward Vite
+
+**📝 Documentation Requirements:**
+
+1. Clear setup instructions for self-hosted mode
+2. `.env.example` file with all required variables
+3. OpenAPI docs at `/docs` endpoint
+4. README with architecture overview
+
+---
+
 ## 🚀 Getting Started
 
 **Immediate Next Steps:**
 
-1. Review this implementation plan
-2. Approve Phase 1 architecture
-3. Create `storyteller_app/` directory structure
-4. Begin backend migration following Phase 1 tasks
-5. Iterate and refine as we build
+1. ✅ Review deployment & authentication strategy (completed)
+2. ✅ Approve Phase 1 architecture (self-hosted focus)
+3. ✅ Decide on project structure (Option A: Independent projects)
+4. Create `storyteller_backend/` directory structure
+5. Begin backend migration following Phase 1 tasks
+6. Iterate and refine as we build
 
-**Questions to Resolve:**
+**Resolved Questions:**
 
-1. Should we use Vite or stick with Next.js for frontend?
-2. Any additional graph visualization libraries to support?
-3. Deploy strategy (Docker, separate services, monorepo)?
-4. Do we need authentication/authorization?
-5. Timeline constraints or priorities?
+1. ✅ **Deployment:** Start with self-hosted, architecture supports future cloud deployment
+2. ✅ **Authentication:** Self-hosted mode (user's OpenAI key in .env), extensible to other modes
+3. ✅ **Project Structure:** Option A - Independent projects (`storyteller_backend/`, `storyteller_frontend/`)
+4. ✅ **Frontend tool:** Vite (faster, simpler than Next.js, better for deployment)
+5. **Graph libraries:** ReactFlow initially, design supports adding Cytoscape/D3 later
+6. **Timeline:** No specific constraints, focus on quality and maintainability
 
 ---
 
