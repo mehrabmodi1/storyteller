@@ -45,23 +45,27 @@ async def list_corpuses():
     registry = get_registry()
     corpuses = []
     
-    for corpus_name in registry.list_corpuses():
+    # list_corpuses() returns list of dicts, not names
+    corpus_list = registry.list_corpuses()
+    
+    for corpus_dict in corpus_list:
+        corpus_name = corpus_dict['name']
         corpus_config = registry.get_corpus(corpus_name)
         if not corpus_config:
             continue
         
         # Get status
-        status_info = registry.get_corpus_status(corpus_name)
+        status_info = registry.check_corpus_status(corpus_name)
         
         corpuses.append(CorpusInfo(
             name=corpus_config.name,
             display_name=corpus_config.display_name,
             description=corpus_config.description,
             is_active=corpus_config.is_active,
-            chunk_count=status_info.get("chunk_count", 0),
+            chunk_count=status_info.chunk_count if status_info else 0,
             last_processed=corpus_config.last_processed,
-            needs_rebuild=status_info.get("needs_rebuild", False),
-            missing_components=status_info.get("missing_components", [])
+            needs_rebuild=status_info.needs_rebuild if status_info else False,
+            missing_components=status_info.missing_components if status_info else []
         ))
     
     return corpuses

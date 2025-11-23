@@ -29,9 +29,12 @@ export function UsernameDropdown() {
   const selectedItem = username ? { value: username, isNew: false } : null;
   
   const handleSelect = (item: UsernameItem) => {
+    console.log('[UsernameDropdown] handleSelect called with:', item);
     if (item.isNew) {
+      console.log('[UsernameDropdown] Showing input for new username');
       setShowInput(true);
     } else {
+      console.log('[UsernameDropdown] Setting username to:', item.value);
       setUsername(item.value);
     }
   };
@@ -57,7 +60,7 @@ export function UsernameDropdown() {
   
   if (showInput) {
     return (
-      <div className={`w-48 relative`}>
+      <div className="w-48 relative">
         <input
           type="text"
           value={newUsername}
@@ -66,7 +69,7 @@ export function UsernameDropdown() {
           onBlur={handleAddUsername}
           autoFocus
           placeholder="Enter username"
-          className={`w-full border border-gray-700 rounded-md p-2 focus:outline-none focus:ring-2 ${
+          className={`w-full border border-gray-700 rounded-md p-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 ${
             theme ? `${theme.input} ${theme.ring}` : 'bg-gray-800 focus:ring-blue-500'
           }`}
         />

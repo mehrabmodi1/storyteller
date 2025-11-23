@@ -43,6 +43,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [username, setUsername] = useLocalStorage<string>('storyteller_username', '');
   const [corpus, setCorpus] = useLocalStorage<string>('storyteller_corpus', 'mahabharata');
   
+  // Debug: Log username changes
+  useEffect(() => {
+    console.log('[AppContext] Username changed to:', username);
+  }, [username]);
+  
   // Persona state (not persisted - user can select each session)
   const [persona, setPersona] = useState<string>('Grandmother');
   const [personas, setPersonas] = useState<PersonaInfo[]>([]);

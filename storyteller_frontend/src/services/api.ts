@@ -21,7 +21,9 @@ async function apiFetch<T>(
   endpoint: string,
   options?: RequestInit
 ): Promise<T> {
-  const url = `${API_CONFIG.baseURL}${endpoint}`;
+  // If endpoint is already a full URL (from buildURL), use it as-is
+  // Otherwise, prepend the base URL
+  const url = endpoint.startsWith('http') ? endpoint : `${API_CONFIG.baseURL}${endpoint}`;
   
   try {
     const response = await fetch(url, {

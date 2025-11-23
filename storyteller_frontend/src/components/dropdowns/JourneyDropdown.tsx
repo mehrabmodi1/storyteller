@@ -19,20 +19,27 @@ export function JourneyDropdown({ onJourneyLoad }: JourneyDropdownProps) {
   const [selectedJourney, setSelectedJourney] = useState<JourneyMeta | null>(null);
   const [loading, setLoading] = useState(false);
   
+  console.log('[JourneyDropdown] Rendering with username:', username, 'journeys:', journeys.length);
+  
   // Load journeys when username changes
   useEffect(() => {
     async function loadJourneys() {
+      console.log('[JourneyDropdown] Username changed:', username);
+      
       if (!username) {
+        console.log('[JourneyDropdown] No username, clearing journeys');
         setJourneys([]);
         return;
       }
       
       try {
+        console.log('[JourneyDropdown] Loading journeys for:', username);
         setLoading(true);
         const response = await listGraphs(username);
+        console.log('[JourneyDropdown] Received journeys:', response.journeys.length);
         setJourneys(response.journeys);
       } catch (error) {
-        console.error('Failed to load journeys:', error);
+        console.error('[JourneyDropdown] Failed to load journeys:', error);
       } finally {
         setLoading(false);
       }

@@ -111,7 +111,7 @@ export function BaseDropdown<T>({
         ref={buttonRef}
         onClick={handleToggle}
         disabled={disabled}
-        className={`w-full border border-gray-700 rounded-md p-2 flex justify-between items-center focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
+        className={`w-full border border-gray-700 rounded-md p-2 flex justify-between items-center text-white focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
           theme ? `${theme.input} ${theme.ring}` : 'bg-gray-800 focus:ring-blue-500'
         }`}
         aria-haspopup="listbox"
@@ -131,7 +131,7 @@ export function BaseDropdown<T>({
       {/* Dropdown Menu */}
       {isOpen && (
         <div
-          className={`absolute z-20 w-full mt-1 border border-gray-700 rounded-md shadow-lg max-h-60 overflow-y-auto scrollbar-thin ${
+          className={`absolute z-20 w-full mt-1 border border-gray-700 rounded-md shadow-lg max-h-60 overflow-y-auto scrollbar-thin text-white ${
             theme ? theme.input : 'bg-gray-800'
           }`}
           role="listbox"
@@ -159,8 +159,8 @@ export function BaseDropdown<T>({
                       isSelected
                         ? 'bg-blue-600 text-white'
                         : isHighlighted
-                        ? 'bg-gray-700'
-                        : 'hover:bg-gray-700'
+                        ? 'bg-gray-700 text-white'
+                        : 'bg-gray-800 text-white hover:bg-gray-700'
                     }`}
                     role="option"
                     aria-selected={isSelected}
