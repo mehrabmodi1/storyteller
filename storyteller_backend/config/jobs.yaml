@@ -1,0 +1,74 @@
+# Corpus Ingestion Jobs Configuration
+# This file defines all corpuses to be processed by the storyteller application
+
+corpuses:
+  mahabharata:
+    display_name: "The Mahabharata"
+    description: "An ancient Indian epic that tells the story of the Kurukshetra War and the fates of the Kaurava and Pandava princes."
+    source_file: "raw_texts/The Complete Mahabharata .pdf"
+    file_type: "pdf"
+    is_active: true
+    cache_dir: "data/processed_chunks/mahabharata"
+    bm25_index_path: "data/bm25_indexes/mahabharata_bm25.pkl"
+    chroma_db_path: "data/chroma_db/mahabharata"
+    
+  odyssey:
+    display_name: "The Odyssey"
+    description: "Ancient Greek epic poem about Odysseus' journey home from Troy after the fall of Troy."
+    source_file: "raw_texts/odessey_samuel_butler"
+    file_type: "text"
+    is_active: true
+    cache_dir: "data/processed_chunks/odyssey"
+    bm25_index_path: "data/bm25_indexes/odyssey_bm25.pkl"
+    chroma_db_path: "data/chroma_db/odyssey"
+    
+  arabian_nights:
+    display_name: "The Arabian Nights"
+    description: "A collection of Middle Eastern folk tales compiled during the Islamic Golden Age, featuring stories like Aladdin, Ali Baba, and Sinbad."
+    source_file: "raw_texts/1001_arabian_nights.txt"
+    file_type: "text"
+    is_active: true
+    cache_dir: "data/processed_chunks/arabian_nights"
+    bm25_index_path: "data/bm25_indexes/arabian_nights_bm25.pkl"
+    chroma_db_path: "data/chroma_db/arabian_nights"
+    
+  volsunga_saga:
+    display_name: "The Volsunga Saga"
+    description: "A legendary saga from Norse mythology that tells the story of the Volsung family, including the hero Sigurd and the dragon Fafnir."
+    source_file: "raw_texts/william-morris_eirikr-magnusson_volsunga-saga.pdf"
+    file_type: "pdf"
+    is_active: true
+    cache_dir: "data/processed_chunks/volsunga_saga"
+    bm25_index_path: "data/bm25_indexes/volsunga_saga_bm25.pkl"
+    chroma_db_path: "data/chroma_db/volsunga_saga"
+    
+  jataka_tales:
+    display_name: "The Jataka Tales"
+    description: "A collection of Buddhist stories about the previous lives of the Buddha, featuring moral lessons and animal fables."
+    source_file: "raw_texts/Jataka_tales_Ellen_C_Babbitt.txt"
+    file_type: "text"
+    is_active: true
+    cache_dir: "data/processed_chunks/jataka_tales"
+    bm25_index_path: "data/bm25_indexes/jataka_tales_bm25.pkl"
+    chroma_db_path: "data/chroma_db/jataka_tales"
+    
+  locus_platform_docs:
+    display_name: "Locus Platform Documentation"
+    description: "Documentation for the Locus platform, including technical specifications, user guides, and API documentation."
+    source_file: "raw_texts/Locus_Platform_Documentation_concatenated.txt"
+    file_type: "text"
+    is_active: true
+    cache_dir: "data/processed_chunks/locus_platform_docs"
+    bm25_index_path: "data/bm25_indexes/locus_platform_docs_bm25.pkl"
+    chroma_db_path: "data/chroma_db/locus_platform_docs"
+
+# Add more corpuses here as needed:
+#   corpus_name:
+#     display_name: "Human Readable Name"
+#     description: "Description of the corpus content"
+#     source_file: "path/to/source/file"
+#     file_type: "pdf" or "text"
+#     is_active: true or false
+#     cache_dir: "data/processed_chunks/corpus_name"
+#     bm25_index_path: "data/bm25_indexes/corpus_name_bm25.pkl"
+#     chroma_db_path: "data/chroma_db/corpus_name" 
