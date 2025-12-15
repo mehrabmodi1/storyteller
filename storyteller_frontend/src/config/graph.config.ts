@@ -8,8 +8,8 @@ export const GRAPH_VISUAL_CONFIG = {
     height: 160,
   },
   edge: {
-    color: '#38bdf8',
-    width: 2,
+    color: '#94a3b8',
+    width: 1.5,
     animated: false,
   },
 };

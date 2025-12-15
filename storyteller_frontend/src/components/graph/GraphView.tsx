@@ -1,4 +1,4 @@
-import { MouseEvent, useCallback, useEffect, useMemo, useRef } from 'react';
+import { MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -34,6 +34,7 @@ const fitViewOptions: FitViewOptions = {
 
 const defaultEdgeOptions: DefaultEdgeOptions = {
   animated: GRAPH_VISUAL_CONFIG.edge.animated,
+  type: 'smoothstep',
   style: {
     stroke: GRAPH_VISUAL_CONFIG.edge.color,
     strokeWidth: GRAPH_VISUAL_CONFIG.edge.width,
@@ -41,6 +42,8 @@ const defaultEdgeOptions: DefaultEdgeOptions = {
   markerEnd: {
     type: MarkerType.ArrowClosed,
     color: GRAPH_VISUAL_CONFIG.edge.color,
+    width: 20,
+    height: 15,
   },
 };
 
@@ -52,6 +55,10 @@ interface GraphCanvasProps {
 function GraphCanvasInner({ graph, onSelectChoice }: GraphCanvasProps) {
   const reactFlowInstance = useReactFlow();
   const prevLatestNodeRef = useRef<string | undefined>();
+  const [edgeDiagnostics, setEdgeDiagnostics] = useState({
+    propCount: 0,
+    storeCount: 0,
+  });
 
   const nodes = useMemo<StoryReactFlowNode[]>(() => graph?.nodes ?? [], [graph?.nodes]);
   const edges = useMemo<StoryReactFlowEdge[]>(() => graph?.edges ?? [], [graph?.edges]);
@@ -66,12 +73,22 @@ function GraphCanvasInner({ graph, onSelectChoice }: GraphCanvasProps) {
   );
 
   useEffect(() => {
-    console.log('[GraphView] nodes/edges', {
-      nodes: nodes.length,
-      edges: edges.length,
-      sampleEdges: edges.slice(0, 3),
+    const storeEdges = reactFlowInstance.getEdges?.() ?? [];
+    setEdgeDiagnostics({
+      propCount: edges.length,
+      storeCount: storeEdges.length,
     });
-  }, [nodes, edges]);
+    console.log('[GraphView] edge diagnostics', {
+      propEdges: edges.length,
+      storeEdges,
+    });
+    if (edges.length && storeEdges.length === 0) {
+      console.warn('[GraphView] Edges provided but ReactFlow store is empty', {
+        edges,
+        storeEdges,
+      });
+    }
+  }, [edges, reactFlowInstance]);
 
   useEffect(() => {
     if (!graph || !graph.latestStoryNodeId || !nodes.length) {
@@ -98,8 +115,10 @@ function GraphCanvasInner({ graph, onSelectChoice }: GraphCanvasProps) {
     });
   }, [graph, nodes, reactFlowInstance]);
 
+  const showEdgeWarning = edgeDiagnostics.propCount > 0 && edgeDiagnostics.storeCount === 0;
+
   return (
-    <div className="h-[720px] rounded-3xl border border-slate-800 overflow-hidden bg-slate-950">
+    <div className="relative h-[720px] rounded-3xl border border-slate-800 overflow-hidden bg-slate-950">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -121,6 +140,15 @@ function GraphCanvasInner({ graph, onSelectChoice }: GraphCanvasProps) {
         />
         <Controls showInteractive={false} />
       </ReactFlow>
+      <div className="absolute bottom-3 right-4 text-xs text-white/70 bg-black/40 backdrop-blur px-3 py-1 rounded-full">
+        Edges: props {edgeDiagnostics.propCount} · store {edgeDiagnostics.storeCount}
+      </div>
+      {showEdgeWarning && (
+        <div className="absolute bottom-16 right-4 text-xs text-red-300 bg-red-900/60 border border-red-500/60 rounded-lg px-3 py-2 max-w-xs">
+          Warning: edges are present in transformed data but missing from the ReactFlow store.
+          Check console logs for diagnostics.
+        </div>
+      )}
     </div>
   );
 }
