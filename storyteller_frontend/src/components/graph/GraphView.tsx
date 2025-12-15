@@ -8,6 +8,8 @@ import ReactFlow, {
   useReactFlow,
   FitViewOptions,
   ReactFlowProvider,
+  DefaultEdgeOptions,
+  MarkerType,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 
@@ -16,6 +18,7 @@ import type {
   StoryReactFlowNode,
   StoryReactFlowEdge,
 } from '@/types/graph.types';
+import { GRAPH_VISUAL_CONFIG } from '@/config/graph.config';
 import { StoryNode } from './StoryNode';
 import { ChoiceNode } from './ChoiceNode';
 
@@ -27,6 +30,18 @@ const nodeTypes: NodeTypes = {
 const fitViewOptions: FitViewOptions = {
   padding: 0.2,
   duration: 800,
+};
+
+const defaultEdgeOptions: DefaultEdgeOptions = {
+  animated: GRAPH_VISUAL_CONFIG.edge.animated,
+  style: {
+    stroke: GRAPH_VISUAL_CONFIG.edge.color,
+    strokeWidth: GRAPH_VISUAL_CONFIG.edge.width,
+  },
+  markerEnd: {
+    type: MarkerType.ArrowClosed,
+    color: GRAPH_VISUAL_CONFIG.edge.color,
+  },
 };
 
 interface GraphCanvasProps {
@@ -49,6 +64,14 @@ function GraphCanvasInner({ graph, onSelectChoice }: GraphCanvasProps) {
     },
     [onSelectChoice],
   );
+
+  useEffect(() => {
+    console.log('[GraphView] nodes/edges', {
+      nodes: nodes.length,
+      edges: edges.length,
+      sampleEdges: edges.slice(0, 3),
+    });
+  }, [nodes, edges]);
 
   useEffect(() => {
     if (!graph || !graph.latestStoryNodeId || !nodes.length) {
@@ -82,6 +105,7 @@ function GraphCanvasInner({ graph, onSelectChoice }: GraphCanvasProps) {
         edges={edges}
         nodeTypes={nodeTypes}
         onNodeClick={handleNodeClick}
+        defaultEdgeOptions={defaultEdgeOptions}
         fitView
         fitViewOptions={fitViewOptions}
         proOptions={{ hideAttribution: true }}

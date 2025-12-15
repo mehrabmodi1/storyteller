@@ -1,5 +1,6 @@
 import type { ElkNode } from 'elkjs';
 import type { TransformedGraph } from './graphTransform';
+import { GRAPH_VISUAL_CONFIG } from '@/config/graph.config';
 
 export const ELK_LAYOUT_OPTIONS = {
   'elk.algorithm': 'layered',
@@ -13,17 +14,20 @@ export const ELK_LAYOUT_OPTIONS = {
   'elk.padding': '[top=80,left=80,bottom=80,right=80]',
 } as const;
 
-const STORY_NODE_SIZE = { width: 320, height: 220 };
-const CHOICE_NODE_SIZE = { width: 260, height: 140 };
-
 export function buildElkGraph(graph: TransformedGraph): ElkNode {
   return {
     id: 'root',
     layoutOptions: ELK_LAYOUT_OPTIONS,
     children: graph.nodes.map((node) => ({
       id: node.id,
-      width: node.type === 'storyNode' ? STORY_NODE_SIZE.width : CHOICE_NODE_SIZE.width,
-      height: node.type === 'storyNode' ? STORY_NODE_SIZE.height : CHOICE_NODE_SIZE.height,
+      width:
+        node.type === 'storyNode'
+          ? GRAPH_VISUAL_CONFIG.storyNode.width
+          : GRAPH_VISUAL_CONFIG.choiceNode.width,
+      height:
+        node.type === 'storyNode'
+          ? GRAPH_VISUAL_CONFIG.storyNode.height
+          : GRAPH_VISUAL_CONFIG.choiceNode.height,
     })),
     edges: graph.edges.map((edge) => ({
       id: edge.id,

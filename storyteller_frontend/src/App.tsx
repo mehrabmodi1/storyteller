@@ -12,9 +12,12 @@ import { transformGraphData, TransformedGraph } from '@/utils/graphTransform';
 import { useELKLayout } from '@/hooks/useELKLayout';
 
 function AppContent() {
-  const { username, corpus, persona, theme, personas, personasLoading } = useApp();
+  const { persona, theme, personas, personasLoading } = useApp();
   const [rawGraph, setRawGraph] = useState<GraphData | null>(null);
   const [journeyPersona, setJourneyPersona] = useState<string | null>(null);
+  const [promptInput, setPromptInput] = useState('');
+  const [isStartingJourney, setIsStartingJourney] = useState(false);
+  const [showDebug, setShowDebug] = useState(false);
 
   const journeyPersonaTheme = useMemo<ColorTheme>(() => {
     if (!journeyPersona) {
@@ -35,12 +38,27 @@ function AppContent() {
       personaTheme: journeyPersonaTheme,
     });
   }, [rawGraph, journeyPersona, journeyPersonaTheme]);
+  const { layout: layoutGraph } = useELKLayout(transformedGraph);
+
   const handleJourneyLoad = (journey: JourneyMeta) => {
     setJourneyPersona(journey.persona);
   };
 
-
-  const { layout: layoutGraph } = useELKLayout(transformedGraph);
+  const handleStartNewJourney = async () => {
+    if (!promptInput.trim()) {
+      return;
+    }
+    setIsStartingJourney(true);
+    try {
+      console.log('[StartJourney] TODO: trigger new story', {
+        prompt: promptInput,
+        persona,
+        corpus: journeyPersona,
+      });
+    } finally {
+      setIsStartingJourney(false);
+    }
+  };
 
   return (
     <div
@@ -48,147 +66,85 @@ function AppContent() {
         theme?.background || 'bg-gray-900'
       } text-white`}
     >
-      <div className="container mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="text-center mb-12">
-          <h1 className="text-5xl font-bold mb-4">
-            Storyteller Frontend
-          </h1>
-          <p className="text-xl text-gray-300">
-            Phase 2 - Components Testing
-          </p>
-        </div>
-
-        {/* Status Card */}
-        <div className="max-w-4xl mx-auto mb-8">
-          <div className="bg-gray-800 rounded-lg shadow-lg p-6 border border-gray-700">
-            <h2 className="text-2xl font-semibold text-green-400 mb-4">
-              ✓ Components Ready to Test
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-gray-300">
+      <div className="container mx-auto px-4 py-8 space-y-8">
+        <div className="space-y-4">
+          <h1 className="text-3xl font-semibold text-white">Story Controls</h1>
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
-                <h3 className="font-semibold mb-2">Infrastructure:</h3>
-                <ul className="space-y-1 text-sm">
-                  <li>✓ AppContext & Global State</li>
-                  <li>✓ useLocalStorage Hook</li>
-                  <li>✓ useSSE Hook</li>
-                  <li>✓ API Client (11 endpoints)</li>
-                  <li>✓ ErrorBoundary</li>
-                </ul>
+                <p className="text-sm text-white/70 mb-1">Username</p>
+                <UsernameDropdown />
               </div>
               <div>
-                <h3 className="font-semibold mb-2">Components:</h3>
-                <ul className="space-y-1 text-sm">
-                  <li>✓ BaseDropdown (Generic)</li>
-                  <li>✓ PersonaDropdown</li>
-                  <li>✓ CorpusDropdown</li>
-                  <li>✓ UsernameDropdown</li>
-                  <li>✓ JourneyDropdown</li>
-                </ul>
+                <p className="text-sm text-white/70 mb-1">Persona</p>
+                {personasLoading ? (
+                  <div className="text-gray-400">Loading personas...</div>
+                ) : (
+                  <PersonaDropdown />
+                )}
               </div>
+              <div>
+                <p className="text-sm text-white/70 mb-1">Corpus</p>
+                <CorpusDropdown />
+              </div>
+              <div>
+                <p className="text-sm text-white/70 mb-1">Load Journey</p>
+                <JourneyDropdown
+                  onJourneyLoad={handleJourneyLoad}
+                  onGraphLoaded={setRawGraph}
+                />
+              </div>
+            </div>
+            <div className="flex flex-col md:flex-row gap-4 items-stretch">
+              <div className="flex-1">
+                <p className="text-sm text-white/70 mb-1">Start a new journey</p>
+                <input
+                  type="text"
+                  value={promptInput}
+                  onChange={(e) => setPromptInput(e.target.value)}
+                  placeholder="Enter an opening prompt..."
+                  className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-white/50"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleStartNewJourney}
+                disabled={!promptInput.trim() || isStartingJourney}
+                className={`md:w-56 px-6 py-3 rounded-xl font-semibold transition flex items-center justify-center ${
+                  !promptInput.trim() || isStartingJourney
+                    ? 'bg-white/20 text-white/60 cursor-not-allowed'
+                    : 'bg-white text-gray-900 hover:bg-gray-200'
+                }`}
+              >
+                {isStartingJourney ? 'Starting…' : 'Start New Journey'}
+              </button>
             </div>
           </div>
         </div>
 
-        {/* Dropdowns Demo */}
-        <div className="max-w-4xl mx-auto">
-          <div className="bg-gray-800 rounded-lg shadow-lg p-8 border border-gray-700">
-            <h2 className="text-2xl font-semibold mb-6">Interactive Components</h2>
-            
-            <div className="space-y-6">
-              {/* Row 1: Username & Persona */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium mb-2 text-gray-300">
-                    Username:
-                  </label>
-                  <UsernameDropdown />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2 text-gray-300">
-                    Persona:
-                  </label>
-                  {personasLoading ? (
-                    <div className="text-gray-400">Loading personas...</div>
-                  ) : (
-                    <PersonaDropdown />
-                  )}
-                </div>
-              </div>
-
-              {/* Row 2: Corpus & Journey */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium mb-2 text-gray-300">
-                    Corpus:
-                  </label>
-                  <CorpusDropdown />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2 text-gray-300">
-                    Load Journey:
-                  </label>
-                  <JourneyDropdown
-                    onJourneyLoad={handleJourneyLoad}
-                    onGraphLoaded={setRawGraph}
-                  />
-                </div>
-              </div>
-            </div>
+        <div className="space-y-4">
+          <h2 className="text-3xl font-semibold">Graph Visualization</h2>
+          <GraphView graph={layoutGraph} />
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => setShowDebug((prev) => !prev)}
+              className="text-sm text-white/70 underline hover:text-white"
+            >
+              {showDebug ? 'Hide debug info' : 'Show debug info'}
+            </button>
           </div>
         </div>
 
-        <div className="max-w-6xl mx-auto mt-8 space-y-8">
-          {/* Current State Display */}
-          <div className="bg-gray-800 rounded-lg shadow-lg p-6 border border-gray-700">
-            <h3 className="text-xl font-semibold mb-4">Current State (from AppContext)</h3>
-            <div className="space-y-2 text-sm font-mono">
-              <div className="flex gap-4">
-                <span className="text-gray-400">Username:</span>
-                <span className="text-green-400">{username || '(none)'}</span>
-              </div>
-              <div className="flex gap-4">
-                <span className="text-gray-400">Persona:</span>
-                <span className="text-green-400">{persona}</span>
-              </div>
-              <div className="flex gap-4">
-                <span className="text-gray-400">Corpus:</span>
-                <span className="text-green-400">{corpus}</span>
-              </div>
-              <div className="flex gap-4">
-                <span className="text-gray-400">Personas Loaded:</span>
-                <span className="text-green-400">{personas.length}</span>
-              </div>
-              <div className="flex gap-4">
-                <span className="text-gray-400">Theme Background:</span>
-                <span className="text-green-400">{theme?.background || 'default'}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Graph Visualization */}
-          <div className="space-y-6">
-            <div>
-              <h3 className="text-2xl font-semibold mb-4">Graph Visualization</h3>
-              <GraphView graph={layoutGraph} />
-            </div>
+        {showDebug && (
+          <div className="bg-black/30 rounded-2xl border border-white/10 p-4">
             <GraphDebugPanel
               rawGraph={rawGraph}
               transformed={transformedGraph}
               layoutGraph={layoutGraph}
             />
           </div>
-        </div>
-
-        {/* Instructions */}
-        <div className="max-w-6xl mx-auto mt-8 text-center text-gray-400 text-sm">
-          <p>
-            Try selecting different options above. The page background will change based on your persona!
-          </p>
-          <p className="mt-2">
-            Username selections are saved to localStorage. Journeys are loaded from the backend.
-          </p>
-        </div>
+        )}
       </div>
     </div>
   )

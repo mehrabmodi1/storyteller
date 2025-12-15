@@ -2,6 +2,7 @@ import React from 'react';
 import type { NodeProps } from 'reactflow';
 import type { ReactFlowNodeData } from '@/types/graph.types';
 import { DEFAULT_THEME } from '@/context/AppContext';
+import { GRAPH_VISUAL_CONFIG } from '@/config/graph.config';
 
 interface ChoiceNodeProps extends NodeProps<ReactFlowNodeData> {
   onSelectChoice?: (nodeId: string) => void;
@@ -24,9 +25,13 @@ export const ChoiceNode: React.FC<ChoiceNodeProps> = ({ id, data, selected, onSe
     <button
       type="button"
       onClick={() => onSelectChoice?.(id)}
-      className={`w-[260px] text-left rounded-2xl border ${
+      className={`text-left rounded-2xl border ${
         selected ? `ring-2 ${ringClass} border-transparent shadow-lg shadow-sky-500/30` : 'border-slate-700'
-      } ${background} text-white p-4 space-y-2 focus:outline-none transition-all`}
+      } ${background} text-white p-4 flex flex-col gap-2 focus:outline-none transition-all`}
+      style={{
+        width: GRAPH_VISUAL_CONFIG.choiceNode.width,
+        height: GRAPH_VISUAL_CONFIG.choiceNode.height,
+      }}
     >
       <div className="flex items-center justify-between text-xs uppercase tracking-wide text-white/80">
         <span>Choice</span>
@@ -36,12 +41,10 @@ export const ChoiceNode: React.FC<ChoiceNodeProps> = ({ id, data, selected, onSe
           </span>
         ) : null}
       </div>
-      <div className="text-base font-semibold">{data.label}</div>
-      {data.story ? (
-        <p className="text-sm text-white/80 line-clamp-4">{data.story}</p>
-      ) : (
-        <p className="text-sm text-white/50 italic">Prompt only</p>
-      )}
+      <div className="text-base font-semibold line-clamp-1">{data.label}</div>
+      <div className="flex-1 overflow-y-auto text-sm text-white/80">
+        {data.story ? data.story : <span className="italic text-white/50">Prompt only</span>}
+      </div>
       <div className="text-xs text-white/60">
         {data.timestamp ? new Date(data.timestamp).toLocaleString() : 'Timestamp unknown'}
       </div>
