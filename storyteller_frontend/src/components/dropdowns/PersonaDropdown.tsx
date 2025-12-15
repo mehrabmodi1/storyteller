@@ -3,7 +3,6 @@
  * Uses BaseDropdown to eliminate code duplication
  */
 
-import React from 'react';
 import { BaseDropdown } from './BaseDropdown';
 import { useApp } from '@/context/AppContext';
 import type { PersonaInfo } from '@/types';

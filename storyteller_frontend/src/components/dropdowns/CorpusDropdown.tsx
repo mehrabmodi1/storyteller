@@ -3,7 +3,7 @@
  * Uses BaseDropdown to eliminate code duplication
  */
 
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { BaseDropdown } from './BaseDropdown';
 import { useApp } from '@/context/AppContext';
 import { listCorpuses } from '@/services/api';

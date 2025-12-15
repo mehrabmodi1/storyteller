@@ -4,7 +4,7 @@
  * Handles: click-outside, keyboard navigation, theming, tooltips
  */
 
-import React, { useState, useRef, useEffect, ReactNode } from 'react';
+import { useState, useRef, useEffect, ReactNode } from 'react';
 import type { ColorTheme } from '@/types';
 
 export interface BaseDropdownProps<T> {
@@ -140,7 +140,7 @@ export function BaseDropdown<T>({
             {items.map((item, index) => {
               const itemKey = getKey(item);
               const itemLabel = getLabel(item);
-              const isSelected = selectedItem && getKey(selectedItem) === itemKey;
+              const isSelected = !!(selectedItem && getKey(selectedItem) === itemKey);
               const isHighlighted = index === highlightedIndex;
 
               return (

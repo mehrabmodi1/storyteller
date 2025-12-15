@@ -3,7 +3,7 @@
  * Provides shared state for username, corpus, persona, and theme
  */
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { listPersonas } from '@/services/api';
 import type { PersonaInfo, ColorTheme } from '@/types';
@@ -28,7 +28,7 @@ interface AppContextType {
   theme: ColorTheme | null;
 }
 
-const defaultTheme: ColorTheme = {
+export const DEFAULT_THEME: ColorTheme = {
   background: 'bg-gray-900',
   button: 'bg-blue-600',
   button_hover: 'hover:bg-blue-500',
@@ -79,7 +79,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []); // Only run on mount
   
   // Compute theme from selected persona
-  const theme = personas.find((p) => p.name === persona)?.color_theme || defaultTheme;
+  const theme = personas.find((p) => p.name === persona)?.color_theme || DEFAULT_THEME;
   
   const value: AppContextType = {
     username,

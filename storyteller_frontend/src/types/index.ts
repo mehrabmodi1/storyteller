@@ -25,7 +25,7 @@ export type {
   GraphData,
   GetLoadedGraphResponse,
   ReactFlowNodeData,
-  ReactFlowNode,
-  ReactFlowEdge,
+  StoryReactFlowNode,
+  StoryReactFlowEdge,
 } from './graph.types';
 

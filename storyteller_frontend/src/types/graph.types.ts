@@ -1,7 +1,5 @@
-/**
- * TypeScript type definitions for graph data structures.
- * These types mirror the backend graph models.
- */
+import type { Node, Edge } from 'reactflow';
+import type { ColorTheme } from './api.types';
 
 /**
  * Node type in the story graph
@@ -18,6 +16,8 @@ export interface GraphNode {
   story?: string | null;
   image_url?: string | null;
   timestamp?: string;
+  persona?: string | null;
+  theme?: ColorTheme;
 }
 
 /**
@@ -44,7 +44,7 @@ export interface GetLoadedGraphResponse {
 }
 
 /**
- * Extended node type for ReactFlow (includes positioning)
+ * Extended node type for ReactFlow (includes persona/theme metadata)
  */
 export interface ReactFlowNodeData {
   id: string;
@@ -53,26 +53,10 @@ export interface ReactFlowNodeData {
   story?: string | null;
   image_url?: string | null;
   timestamp?: string;
+  persona?: string | null;
+  theme?: ColorTheme;
 }
 
-/**
- * ReactFlow node with position
- */
-export interface ReactFlowNode {
-  id: string;
-  type: string; // 'storyNode' or 'choiceNode' for ReactFlow
-  data: ReactFlowNodeData;
-  position: { x: number; y: number };
-}
-
-/**
- * ReactFlow edge
- */
-export interface ReactFlowEdge {
-  id: string;
-  source: string;
-  target: string;
-  type?: string;
-  animated?: boolean;
-}
+export type StoryReactFlowNode = Node<ReactFlowNodeData>;
+export type StoryReactFlowEdge = Edge;
 

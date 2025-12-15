@@ -6,15 +6,16 @@
 import { useEffect, useState } from 'react';
 import { BaseDropdown } from './BaseDropdown';
 import { useApp } from '@/context/AppContext';
-import { listGraphs, loadGraph } from '@/services/api';
-import type { JourneyMeta } from '@/types';
+import { listGraphs, loadGraph, getLoadedGraph } from '@/services/api';
+import type { JourneyMeta, GraphData } from '@/types';
 
 interface JourneyDropdownProps {
   onJourneyLoad?: (journey: JourneyMeta) => void;
+  onGraphLoaded?: (graph: GraphData) => void;
 }
 
-export function JourneyDropdown({ onJourneyLoad }: JourneyDropdownProps) {
-  const { username, theme } = useApp();
+export function JourneyDropdown({ onJourneyLoad, onGraphLoaded }: JourneyDropdownProps) {
+  const { username, theme, setCorpus } = useApp();
   const [journeys, setJourneys] = useState<JourneyMeta[]>([]);
   const [selectedJourney, setSelectedJourney] = useState<JourneyMeta | null>(null);
   const [loading, setLoading] = useState(false);
@@ -59,6 +60,13 @@ export function JourneyDropdown({ onJourneyLoad }: JourneyDropdownProps) {
       if (response.success) {
         setSelectedJourney(journey);
         onJourneyLoad?.(journey);
+        setCorpus(journey.corpus_name);
+
+        // Fetch the loaded graph data for debugging/visualization
+        const graphResponse = await getLoadedGraph();
+        if (graphResponse?.graph) {
+          onGraphLoaded?.(graphResponse.graph);
+        }
       } else {
         console.error('Failed to load journey:', response.error);
         alert(`Failed to load journey: ${response.error}`);

@@ -1,15 +1,53 @@
-import { AppProvider, useApp } from '@/context/AppContext'
-import { ErrorBoundary } from '@/components/ErrorBoundary'
-import { PersonaDropdown } from '@/components/dropdowns/PersonaDropdown'
-import { CorpusDropdown } from '@/components/dropdowns/CorpusDropdown'
-import { UsernameDropdown } from '@/components/dropdowns/UsernameDropdown'
-import { JourneyDropdown } from '@/components/dropdowns/JourneyDropdown'
+import { useMemo, useState } from 'react';
+import { AppProvider, useApp, DEFAULT_THEME } from '@/context/AppContext';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { PersonaDropdown } from '@/components/dropdowns/PersonaDropdown';
+import { CorpusDropdown } from '@/components/dropdowns/CorpusDropdown';
+import { UsernameDropdown } from '@/components/dropdowns/UsernameDropdown';
+import { JourneyDropdown } from '@/components/dropdowns/JourneyDropdown';
+import { GraphDebugPanel } from '@/components/debug';
+import { GraphView } from '@/components/graph/GraphView';
+import type { ColorTheme, GraphData, JourneyMeta } from '@/types';
+import { transformGraphData, TransformedGraph } from '@/utils/graphTransform';
+import { useELKLayout } from '@/hooks/useELKLayout';
 
 function AppContent() {
-  const { username, corpus, persona, theme, personas, personasLoading } = useApp()
+  const { username, corpus, persona, theme, personas, personasLoading } = useApp();
+  const [rawGraph, setRawGraph] = useState<GraphData | null>(null);
+  const [journeyPersona, setJourneyPersona] = useState<string | null>(null);
+
+  const journeyPersonaTheme = useMemo<ColorTheme>(() => {
+    if (!journeyPersona) {
+      return DEFAULT_THEME;
+    }
+    return (
+      personas.find((p) => p.name === journeyPersona)?.color_theme ??
+      DEFAULT_THEME
+    );
+  }, [journeyPersona, personas]);
+
+  const transformedGraph = useMemo<TransformedGraph | null>(() => {
+    if (!rawGraph) {
+      return null;
+    }
+    return transformGraphData(rawGraph, {
+      personaName: journeyPersona,
+      personaTheme: journeyPersonaTheme,
+    });
+  }, [rawGraph, journeyPersona, journeyPersonaTheme]);
+  const handleJourneyLoad = (journey: JourneyMeta) => {
+    setJourneyPersona(journey.persona);
+  };
+
+
+  const { layout: layoutGraph } = useELKLayout(transformedGraph);
 
   return (
-    <div className={`min-h-screen transition-colors ${theme?.background || 'bg-gray-900'} text-white`}>
+    <div
+      className={`min-h-screen transition-colors ${
+        theme?.background || 'bg-gray-900'
+      } text-white`}
+    >
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <div className="text-center mb-12">
@@ -90,15 +128,18 @@ function AppContent() {
                   <label className="block text-sm font-medium mb-2 text-gray-300">
                     Load Journey:
                   </label>
-                  <JourneyDropdown />
+                  <JourneyDropdown
+                    onJourneyLoad={handleJourneyLoad}
+                    onGraphLoaded={setRawGraph}
+                  />
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Current State Display */}
-        <div className="max-w-4xl mx-auto mt-8">
+        <div className="max-w-6xl mx-auto mt-8 space-y-8">
+          {/* Current State Display */}
           <div className="bg-gray-800 rounded-lg shadow-lg p-6 border border-gray-700">
             <h3 className="text-xl font-semibold mb-4">Current State (from AppContext)</h3>
             <div className="space-y-2 text-sm font-mono">
@@ -124,10 +165,23 @@ function AppContent() {
               </div>
             </div>
           </div>
+
+          {/* Graph Visualization */}
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-2xl font-semibold mb-4">Graph Visualization</h3>
+              <GraphView graph={layoutGraph} />
+            </div>
+            <GraphDebugPanel
+              rawGraph={rawGraph}
+              transformed={transformedGraph}
+              layoutGraph={layoutGraph}
+            />
+          </div>
         </div>
 
         {/* Instructions */}
-        <div className="max-w-4xl mx-auto mt-8 text-center text-gray-400 text-sm">
+        <div className="max-w-6xl mx-auto mt-8 text-center text-gray-400 text-sm">
           <p>
             Try selecting different options above. The page background will change based on your persona!
           </p>

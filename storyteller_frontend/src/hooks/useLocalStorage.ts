@@ -3,7 +3,7 @@
  * Handles private browsing mode and localStorage failures gracefully
  */
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
 export function useLocalStorage<T>(
   key: string,
