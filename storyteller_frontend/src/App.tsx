@@ -178,6 +178,9 @@ function AppContent() {
               rawGraph={rawGraph}
               transformed={transformedGraph}
               layoutGraph={layoutGraph}
+              isStreaming={isStreaming}
+              streamError={streamError}
+              streamingText={streamingText}
             />
           </div>
         )}
