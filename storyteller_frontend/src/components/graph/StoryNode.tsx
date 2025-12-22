@@ -18,7 +18,8 @@ export const StoryNode: React.FC<NodeProps<ReactFlowNodeData>> = ({ data, select
   const inputBg = theme.input ?? 'bg-slate-800';
   const ringClass = getRingClass(theme.ring);
   const [imageFailed, setImageFailed] = useState(false);
-  const showImage = !!data.image_url && !imageFailed;
+  const imageSrc = data.image_url ?? undefined;
+  const showImage = !!imageSrc && !imageFailed;
 
   return (
     <div className="relative">
@@ -55,7 +56,7 @@ export const StoryNode: React.FC<NodeProps<ReactFlowNodeData>> = ({ data, select
             <div className="w-full aspect-square">
               {showImage ? (
                 <img
-                  src={data.image_url}
+                  src={imageSrc}
                   alt={data.label}
                   className="w-full h-full object-cover"
                   onError={() => setImageFailed(true)}

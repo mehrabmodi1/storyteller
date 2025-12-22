@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AppProvider, useApp, DEFAULT_THEME } from '@/context/AppContext';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { PersonaDropdown } from '@/components/dropdowns/PersonaDropdown';
@@ -10,14 +10,18 @@ import { GraphView } from '@/components/graph/GraphView';
 import type { ColorTheme, GraphData, JourneyMeta } from '@/types';
 import { transformGraphData, TransformedGraph } from '@/utils/graphTransform';
 import { useELKLayout } from '@/hooks/useELKLayout';
+import { buildStreamStoryURL } from '@/services/api';
+import { useSSE } from '@/hooks';
 
 function AppContent() {
-  const { persona, theme, personas, personasLoading } = useApp();
+  const { persona, theme, personas, personasLoading, username, corpus, setCorpus } = useApp();
   const [rawGraph, setRawGraph] = useState<GraphData | null>(null);
   const [journeyPersona, setJourneyPersona] = useState<string | null>(null);
   const [promptInput, setPromptInput] = useState('');
-  const [isStartingJourney, setIsStartingJourney] = useState(false);
+  const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const [showDebug, setShowDebug] = useState(false);
+  const [journeyError, setJourneyError] = useState<string | null>(null);
+  const { graphData: streamingGraph, isStreaming, error: streamError, closeStream } = useSSE(streamUrl);
 
   const journeyPersonaTheme = useMemo<ColorTheme>(() => {
     if (!journeyPersona) {
@@ -42,23 +46,41 @@ function AppContent() {
 
   const handleJourneyLoad = (journey: JourneyMeta) => {
     setJourneyPersona(journey.persona);
+    setCorpus(journey.corpus_name);
   };
 
-  const handleStartNewJourney = async () => {
-    if (!promptInput.trim()) {
+  const handleStartNewJourney = () => {
+    const trimmedPrompt = promptInput.trim();
+    if (!trimmedPrompt) {
       return;
     }
-    setIsStartingJourney(true);
-    try {
-      console.log('[StartJourney] TODO: trigger new story', {
-        prompt: promptInput,
-        persona,
-        corpus: journeyPersona,
-      });
-    } finally {
-      setIsStartingJourney(false);
-    }
+    setJourneyError(null);
+    setJourneyPersona(persona);
+    const sseUrl = buildStreamStoryURL({
+      prompt: trimmedPrompt,
+      new_journey: true,
+      persona_name: persona,
+      username,
+      corpus_name: corpus,
+    });
+    setStreamUrl(sseUrl);
   };
+
+  useEffect(() => {
+    if (streamingGraph) {
+      setRawGraph(streamingGraph);
+      setPromptInput('');
+      setStreamUrl(null);
+      setJourneyError(null);
+    }
+  }, [streamingGraph]);
+
+  useEffect(() => {
+    if (streamError) {
+      setJourneyError(streamError.message);
+      setStreamUrl(null);
+    }
+  }, [streamError]);
 
   return (
     <div
@@ -109,16 +131,30 @@ function AppContent() {
               <button
                 type="button"
                 onClick={handleStartNewJourney}
-                disabled={!promptInput.trim() || isStartingJourney}
+                disabled={!promptInput.trim() || isStreaming}
                 className={`md:w-56 px-6 py-3 rounded-xl font-semibold transition flex items-center justify-center ${
-                  !promptInput.trim() || isStartingJourney
+                  !promptInput.trim() || isStreaming
                     ? 'bg-white/20 text-white/60 cursor-not-allowed'
                     : 'bg-white text-gray-900 hover:bg-gray-200'
                 }`}
               >
-                {isStartingJourney ? 'Starting…' : 'Start New Journey'}
+                {isStreaming ? 'Starting…' : 'Start New Journey'}
               </button>
             </div>
+            {journeyError ? (
+              <p className="text-sm text-red-400">
+                Failed to start journey: {journeyError}
+                {streamError ? (
+                  <button
+                    type="button"
+                    onClick={closeStream}
+                    className="ml-3 underline text-red-200 hover:text-red-100"
+                  >
+                    Dismiss
+                  </button>
+                ) : null}
+              </p>
+            ) : null}
           </div>
         </div>
 
@@ -153,7 +189,7 @@ function AppContent() {
 function App() {
   return (
     <ErrorBoundary>
-      <AppProvider>
+      <AppProvider>ßß
         <AppContent />
       </AppProvider>
     </ErrorBoundary>
