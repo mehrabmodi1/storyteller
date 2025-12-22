@@ -34,6 +34,14 @@ from models.state import StorytellerState
 from embed_retrieve import HybridRetriever
 from services.image_generator import ImageGenerator
 from services.journey_manager import get_journey_manager
+ACTIVE_OPENAI_API_KEY = settings.openai_api_key
+
+
+def _set_active_api_key(override: Optional[str] = None) -> None:
+    """Update the module-level API key used for ChatOpenAI instances."""
+    global ACTIVE_OPENAI_API_KEY
+    ACTIVE_OPENAI_API_KEY = settings.resolve_openai_key(override)
+
 
 
 # --- Pydantic Models for Structured Output ---
@@ -116,7 +124,8 @@ def generate_search_query(state: StorytellerState) -> Dict[str, Any]:
     
     llm_for_query = ChatOpenAI(
         temperature=0, 
-        model_name=settings.chat_model
+        model_name=settings.chat_model,
+        api_key=ACTIVE_OPENAI_API_KEY,
     ).with_structured_output(SearchQuery)
 
     query_generation_chain = prompt | llm_for_query
@@ -234,7 +243,8 @@ You must explicitly reference how the current chapter connects to the previous c
     story_llm = ChatOpenAI(
         temperature=0.9,
         model_name=settings.chat_model,
-        streaming=True
+        streaming=True,
+        api_key=ACTIVE_OPENAI_API_KEY,
     )
 
     story_generation_chain = prompt | story_llm
@@ -353,7 +363,8 @@ def generate_choices(state: StorytellerState) -> Dict[str, Any]:
 
     choices_llm = ChatOpenAI(
         temperature=0.7,
-        model_name=settings.chat_model
+        model_name=settings.chat_model,
+        api_key=ACTIVE_OPENAI_API_KEY,
     ).with_structured_output(Choices)
     
     choice_generation_chain = prompt | choices_llm
@@ -418,7 +429,7 @@ def update_graph_with_choices(state: StorytellerState) -> Dict[str, Any]:
 
 # --- Build LangGraph Workflow ---
 
-def create_story_agent():
+def create_story_agent(api_key: Optional[str] = None):
     """
     Create and compile the LangGraph workflow for story generation.
     
@@ -426,6 +437,8 @@ def create_story_agent():
         Compiled LangGraph agent
     """
     # Initialize the state graph with our StorytellerState
+    _set_active_api_key(api_key)
+
     workflow = StateGraph(StorytellerState)
 
     # Add nodes to the graph
@@ -453,17 +466,20 @@ def create_story_agent():
 
 # Global instance
 _story_agent = None
+_story_agent_api_key: Optional[str] = None
 
 
-def get_story_agent():
+def get_story_agent(api_key: Optional[str] = None):
     """
     Get the global story agent instance.
     
     Returns:
         Compiled LangGraph story agent
     """
-    global _story_agent
-    if _story_agent is None:
-        _story_agent = create_story_agent()
+    global _story_agent, _story_agent_api_key
+    resolved_key = settings.resolve_openai_key(api_key)
+    if _story_agent is None or _story_agent_api_key != resolved_key:
+        _story_agent = create_story_agent(resolved_key)
+        _story_agent_api_key = resolved_key
     return _story_agent
 

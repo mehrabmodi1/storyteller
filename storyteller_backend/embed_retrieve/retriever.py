@@ -1,6 +1,4 @@
 import openai
-from dotenv import load_dotenv
-import os
 import chromadb
 import pickle
 from typing import List, Dict, Optional
@@ -8,6 +6,7 @@ from typing import List, Dict, Optional
 from .corpus_registry import get_registry
 from models.chunk import Chunk
 from . import config
+from config.settings import settings
 
 class HybridRetriever:
     """
@@ -15,12 +14,8 @@ class HybridRetriever:
     and a semantic (ChromaDB) search system using Reciprocal Rank Fusion.
     """
 
-    def __init__(self, corpus_name: Optional[str] = None):
-        load_dotenv()
-        self.api_key = os.getenv("OPENAI_API_KEY")
-        if not self.api_key:
-            raise ValueError("OPENAI_API_KEY not found in .env file.")
-        
+    def __init__(self, corpus_name: Optional[str] = None, api_key: Optional[str] = None):
+        self.api_key = settings.resolve_openai_key(api_key)
         self.openai_client = openai.OpenAI(api_key=self.api_key)
         
         # Get corpus configuration

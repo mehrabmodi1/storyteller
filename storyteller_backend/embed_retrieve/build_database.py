@@ -1,9 +1,8 @@
 import fitz  # PyMuPDF
 import tiktoken
 import openai
-from dotenv import load_dotenv
 import os
-from typing import List
+from typing import List, Optional
 import chromadb
 import json
 from tqdm import tqdm
@@ -14,6 +13,7 @@ import argparse
 # Assuming config.py is in the same directory
 from . import config
 from models.chunk import Chunk, DocumentPosition
+from config.settings import settings
 
 
 
@@ -24,18 +24,14 @@ class HybridRetrieverBuilder:
     vector database and a cache.
     """
 
-    def __init__(self, pdf_path: str):
+    def __init__(self, pdf_path: str, api_key: Optional[str] = None):
         """
         Initializes the builder and sets up the OpenAI client.
 
         Args:
             pdf_path: The path to the source PDF file.
         """
-        load_dotenv()
-        self.api_key = os.getenv("OPENAI_API_KEY")
-        if not self.api_key:
-            raise ValueError("OPENAI_API_KEY not found in .env file. Please ensure it is set.")
-        
+        self.api_key = settings.resolve_openai_key(api_key)
         self.openai_client = openai.OpenAI(api_key=self.api_key)
         self.pdf_path = pdf_path
         

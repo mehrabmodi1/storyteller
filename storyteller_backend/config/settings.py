@@ -14,6 +14,10 @@ from pathlib import Path
 # SECRETS (loaded from .env file)
 # ============================================
 
+BACKEND_ROOT = Path(__file__).resolve().parent.parent
+ENV_FILE_PATH = BACKEND_ROOT / ".env"
+
+
 class Secrets(BaseSettings):
     """
     Secrets that must be provided via .env file.
@@ -27,7 +31,7 @@ class Secrets(BaseSettings):
     platform_openai_key: Optional[str] = None  # For credit_system mode (Phase 3+)
     
     model_config = {
-        "env_file": ".env",
+        "env_file": str(ENV_FILE_PATH),
         "env_file_encoding": "utf-8",
         "case_sensitive": False,
         "extra": "ignore"
@@ -102,6 +106,13 @@ class Settings:
     @property
     def openai_api_key(self) -> str:
         return self._secrets.openai_api_key
+    
+    def resolve_openai_key(self, override: Optional[str] = None) -> str:
+        """
+        Return an OpenAI API key, defaulting to the configured secret.
+        Allows override for per-request credentials.
+        """
+        return override or self.openai_api_key
     
     @property
     def platform_openai_key(self) -> Optional[str]:
