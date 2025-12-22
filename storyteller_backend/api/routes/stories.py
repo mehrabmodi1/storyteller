@@ -12,6 +12,7 @@ from typing import Optional
 import networkx as nx
 import json
 from datetime import datetime
+import traceback
 
 from models.state import StorytellerState
 from models.api_models import StoryRequest
@@ -138,7 +139,10 @@ async def story_generation_events(
         yield {"event": "end", "data": "Stream ended."}
     
     except Exception as e:
-        print(f"ERROR during story generation: {e}")
+        error_msg = f"ERROR during story generation: {e}"
+        print(error_msg)
+        print("Full traceback:")
+        traceback.print_exc()
         yield {"event": "error", "data": str(e)}
 
 

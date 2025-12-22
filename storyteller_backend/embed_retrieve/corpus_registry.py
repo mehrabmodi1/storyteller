@@ -69,7 +69,20 @@ class CorpusRegistry:
             try:
                 with open(self.registry_file, 'r') as f:
                     data = json.load(f)
+                    # Determine base directory for resolving relative paths
+                    try:
+                        from config.settings import settings
+                        base_dir = settings.data_path.parent  # Repo root
+                    except ImportError:
+                        base_dir = Path.cwd()  # Fallback
+                    
                     for corpus_data in data.get('corpuses', []):
+                        # Resolve relative paths to absolute paths
+                        corpus_data['source_file'] = str((base_dir / corpus_data['source_file']).resolve())
+                        corpus_data['cache_dir'] = str((base_dir / corpus_data['cache_dir']).resolve())
+                        corpus_data['bm25_index_path'] = str((base_dir / corpus_data['bm25_index_path']).resolve())
+                        corpus_data['chroma_db_path'] = str((base_dir / corpus_data['chroma_db_path']).resolve())
+                        
                         corpus = CorpusConfig(**corpus_data)
                         self.corpuses[corpus.name] = corpus
             except Exception as e:
