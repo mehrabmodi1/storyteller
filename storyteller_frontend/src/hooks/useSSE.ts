@@ -85,6 +85,8 @@ export function useSSE(url: string | null): UseSSEResult {
     
     // Register event listeners
     eventSource.addEventListener('story_chunk', handleChunk);
+    // Backend sends final graph on the default 'message' event; keep legacy name as fallback.
+    eventSource.addEventListener('message', handleGraph);
     eventSource.addEventListener('graph_data', handleGraph);
     eventSource.addEventListener('end', handleEnd);
     eventSource.addEventListener('error', handleError);

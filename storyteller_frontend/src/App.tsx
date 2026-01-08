@@ -7,6 +7,7 @@ import { UsernameDropdown } from '@/components/dropdowns/UsernameDropdown';
 import { JourneyDropdown } from '@/components/dropdowns/JourneyDropdown';
 import { GraphDebugPanel } from '@/components/debug';
 import { GraphView } from '@/components/graph/GraphView';
+import { ReadingPanel } from '@/components/ReadingPanel';
 import type { ColorTheme, GraphData, JourneyMeta } from '@/types';
 import { transformGraphData, TransformedGraph } from '@/utils/graphTransform';
 import { useELKLayout } from '@/hooks/useELKLayout';
@@ -20,8 +21,10 @@ function AppContent() {
   const [promptInput, setPromptInput] = useState('');
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const [showDebug, setShowDebug] = useState(false);
+  const [showReadingPanel, setShowReadingPanel] = useState(false);
+  const [currentStoryTitle, setCurrentStoryTitle] = useState<string>('Story');
   const [journeyError, setJourneyError] = useState<string | null>(null);
-  const { graphData: streamingGraph, isStreaming, error: streamError, closeStream } = useSSE(streamUrl);
+  const { graphData: streamingGraph, isStreaming, error: streamError, closeStream, streamingText } = useSSE(streamUrl);
 
   const journeyPersonaTheme = useMemo<ColorTheme>(() => {
     if (!journeyPersona) {
@@ -56,6 +59,7 @@ function AppContent() {
     }
     setJourneyError(null);
     setJourneyPersona(persona);
+    setCurrentStoryTitle(trimmedPrompt);
     const sseUrl = buildStreamStoryURL({
       prompt: trimmedPrompt,
       new_journey: true,
@@ -65,6 +69,12 @@ function AppContent() {
     });
     setStreamUrl(sseUrl);
   };
+
+  useEffect(() => {
+    if (isStreaming) {
+      setShowReadingPanel(true);
+    }
+  }, [isStreaming]);
 
   useEffect(() => {
     if (streamingGraph) {
@@ -184,6 +194,14 @@ function AppContent() {
             />
           </div>
         )}
+        <ReadingPanel
+          open={showReadingPanel && (isStreaming || !!streamingText)}
+          isStreaming={isStreaming}
+          text={streamingText}
+          title={currentStoryTitle}
+          themeInputClass={journeyPersonaTheme?.input}
+          onClose={() => setShowReadingPanel(false)}
+        />
       </div>
     </div>
   )
