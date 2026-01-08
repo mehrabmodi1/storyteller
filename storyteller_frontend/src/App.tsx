@@ -23,6 +23,8 @@ function AppContent() {
   const [showDebug, setShowDebug] = useState(false);
   const [showReadingPanel, setShowReadingPanel] = useState(false);
   const [currentStoryTitle, setCurrentStoryTitle] = useState<string>('Story');
+  const [activeChoiceId, setActiveChoiceId] = useState<string | null>(null);
+  const [activeChoicePrompt, setActiveChoicePrompt] = useState<string>('');
   const [journeyError, setJourneyError] = useState<string | null>(null);
   const { graphData: streamingGraph, isStreaming, error: streamError, closeStream, streamingText } = useSSE(streamUrl);
 
@@ -60,6 +62,8 @@ function AppContent() {
     setJourneyError(null);
     setJourneyPersona(persona);
     setCurrentStoryTitle(trimmedPrompt);
+    setActiveChoiceId(null);
+    setActiveChoicePrompt('');
     const sseUrl = buildStreamStoryURL({
       prompt: trimmedPrompt,
       new_journey: true,
@@ -80,6 +84,8 @@ function AppContent() {
     if (streamingGraph) {
       setRawGraph(streamingGraph);
       setPromptInput('');
+      setActiveChoiceId(null);
+      setActiveChoicePrompt('');
       setStreamUrl(null);
       setJourneyError(null);
     }
@@ -91,6 +97,44 @@ function AppContent() {
       setStreamUrl(null);
     }
   }, [streamError]);
+
+  const handleSelectChoice = (nodeId: string) => {
+    setActiveChoiceId(nodeId);
+    const choiceNode = rawGraph?.nodes.find((n) => n.id === nodeId);
+    setActiveChoicePrompt(choiceNode?.label ?? '');
+  };
+
+  const handleCancelChoiceEdit = () => {
+    setActiveChoiceId(null);
+    setActiveChoicePrompt('');
+  };
+
+  const handleSubmitContinuation = () => {
+    if (!activeChoiceId) return;
+    const trimmed = activeChoicePrompt.trim();
+    if (!trimmed) return;
+
+    setCurrentStoryTitle(trimmed);
+    const sseUrl = buildStreamStoryURL({
+      prompt: trimmed,
+      choice_id: activeChoiceId,
+      new_journey: false,
+      persona_name: journeyPersona ?? persona,
+      username,
+      corpus_name: corpus,
+    });
+    setStreamUrl(sseUrl);
+    setShowReadingPanel(true);
+    setActiveChoiceId(null);
+    setActiveChoicePrompt('');
+  };
+
+  const handleNewJourneyKeyDown: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleStartNewJourney();
+    }
+  };
 
   return (
     <div
@@ -134,7 +178,10 @@ function AppContent() {
                   type="text"
                   value={promptInput}
                   onChange={(e) => setPromptInput(e.target.value)}
+                  onKeyDown={handleNewJourneyKeyDown}
                   placeholder="Enter an opening prompt..."
+                  id="new-journey-prompt"
+                  name="new-journey-prompt"
                   className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-white/50"
                 />
               </div>
@@ -170,7 +217,15 @@ function AppContent() {
 
         <div className="space-y-4">
           <h2 className="text-3xl font-semibold">Graph Visualization</h2>
-          <GraphView graph={layoutGraph} />
+          <GraphView
+            graph={layoutGraph}
+            onSelectChoice={handleSelectChoice}
+            activeChoiceId={activeChoiceId}
+            editablePrompt={activeChoicePrompt}
+            onChangePrompt={setActiveChoicePrompt}
+            onSubmitPrompt={handleSubmitContinuation}
+            onCancelEdit={handleCancelChoiceEdit}
+          />
           <div className="flex justify-end">
             <button
               type="button"

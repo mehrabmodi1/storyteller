@@ -50,9 +50,18 @@ const defaultEdgeOptions: DefaultEdgeOptions = {
 interface GraphCanvasProps {
   graph: TransformedGraph | null;
   onSelectChoice?: (nodeId: string) => void;
+  activeChoiceId?: string | null;
+  editablePrompt?: string;
+  onChangePrompt?: (value: string) => void;
+  onSubmitPrompt?: () => void;
+  onCancelEdit?: () => void;
 }
 
-function GraphCanvasInner({ graph, onSelectChoice }: GraphCanvasProps) {
+function GraphCanvasInner({
+  graph,
+  onSelectChoice,
+  onCancelEdit,
+}: GraphCanvasProps) {
   const reactFlowInstance = useReactFlow();
   const prevLatestNodeRef = useRef<string | undefined>();
   const [edgeDiagnostics, setEdgeDiagnostics] = useState({
@@ -71,6 +80,10 @@ function GraphCanvasInner({ graph, onSelectChoice }: GraphCanvasProps) {
     },
     [onSelectChoice],
   );
+
+  const handlePaneClick = useCallback(() => {
+    onCancelEdit?.();
+  }, [onCancelEdit]);
 
   useEffect(() => {
     const storeEdges = reactFlowInstance.getEdges?.() ?? [];
@@ -124,6 +137,7 @@ function GraphCanvasInner({ graph, onSelectChoice }: GraphCanvasProps) {
         edges={edges}
         nodeTypes={nodeTypes}
         onNodeClick={handleNodeClick}
+        onPaneClick={handlePaneClick}
         defaultEdgeOptions={defaultEdgeOptions}
         fitView
         fitViewOptions={fitViewOptions}
@@ -154,9 +168,37 @@ function GraphCanvasInner({ graph, onSelectChoice }: GraphCanvasProps) {
 }
 
 export function GraphView(props: GraphCanvasProps) {
+  const { graph, activeChoiceId, editablePrompt, onChangePrompt, onSubmitPrompt, onCancelEdit, onSelectChoice } = props;
+
+  const nodesWithChoiceProps = useMemo(() => {
+    if (!graph?.nodes?.length) return graph?.nodes ?? [];
+    return graph.nodes.map((node) => {
+      if (node.type !== 'choiceNode') return node;
+      const isActive = node.id === activeChoiceId;
+      return {
+        ...node,
+        data: {
+          ...node.data,
+          choiceProps: {
+            isActive,
+            editablePrompt,
+            onChangePrompt,
+            onSubmitPrompt,
+            onCancelEdit,
+            onSelectChoice,
+          },
+        },
+      } as StoryReactFlowNode;
+    });
+  }, [graph?.nodes, activeChoiceId, editablePrompt, onChangePrompt, onSubmitPrompt, onCancelEdit, onSelectChoice]);
+
   return (
     <ReactFlowProvider>
-      <GraphCanvasInner {...props} />
+      <GraphCanvasInner
+        {...props}
+        graph={graph ? { ...graph, nodes: nodesWithChoiceProps } : graph}
+        onCancelEdit={onCancelEdit}
+      />
     </ReactFlowProvider>
   );
 }
