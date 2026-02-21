@@ -197,14 +197,27 @@ async def generate_story(state: StorytellerState, config: RunnableConfig) -> Dic
     parent_image_prompt = state.get('parent_image_prompt')
     persona_name = state.get('persona_name')
 
+    persona_suffix = """
+        Grounding constraints (must follow):
+        - Use ONLY facts, events, characters, places, and causal relationships that appear in the SOURCE MATERIAL CHUNKS.
+        - Do NOT invent new characters, plot points, settings, timelines, or outcomes not supported by the chunks.
+        - If a detail is not explicitly in the chunks, either omit it or phrase it as uncertainty.
+        - Prioritize fidelity over creativity; the story should feel like an interpretation of the sources, not a new story."""
+
     # Default system prompt if no persona is selected
-    base_system_prompt = """You are a master storyteller. Your task is to weave a cohesive and engaging story from the provided source material, inspired by the user's prompt. 
+    base_system_prompt = """You are a master storyteller. Your task is to weave a cohesive and engaging story from the provided source material, inspired by the user's prompt.
         The story's length and level of detail should be appropriate for approximately {story_length} tokens.
-        Do not just summarize the chunks; create a rich narrative, staying true to the events described in the source material."""
+        Do not just summarize the chunks; create a rich narrative, staying true to the events described in the source material.
+
+        Grounding constraints (must follow):
+        - Use ONLY facts, events, characters, places, and causal relationships that appear in the SOURCE MATERIAL CHUNKS.
+        - Do NOT invent new characters, plot points, settings, timelines, or outcomes not supported by the chunks.
+        - If a detail is not explicitly in the chunks, either omit it or phrase it as uncertainty.
+        - Prioritize fidelity over creativity; the story should feel like an interpretation of the sources, not a new story."""
 
     # Fetch persona prompt if a persona is selected
     if persona_name and persona_name in PERSONAS_DATA:
-        persona_prompt = PERSONAS_DATA[persona_name]["system_prompt"]
+        persona_prompt = f"{PERSONAS_DATA[persona_name]['system_prompt']}{persona_suffix}"
         # The persona prompt will give the core instruction
         system_prompt = f"{persona_prompt}\n\n"
         if last_story:
@@ -217,9 +230,15 @@ Your task is to use the following text chunks as source material to write the ne
 You must explicitly reference how the current chapter connects to the previous chapter. Transition gracefully from the previous chapter to the current one. The story should be inspired by the user's prompt."""
         else:
             # Add context for starting a new story
-            system_prompt += """Use the provided source material to write a story inspired by the user's prompt. 
+            system_prompt += """Use the provided source material to write a story inspired by the user's prompt.
 The story's length and level of detail should be appropriate for approximately {story_length} tokens.
-Do not just summarize the chunks; create a rich narrative, staying true to the events described in the source material."""
+Do not just summarize the chunks; create a rich narrative, staying true to the events described in the source material.
+
+Grounding constraints (must follow):
+- Use ONLY facts, events, characters, places, and causal relationships that appear in the SOURCE MATERIAL CHUNKS.
+- Do NOT invent new characters, plot points, settings, timelines, or outcomes not supported by the chunks.
+- If a detail is not explicitly in the chunks, either omit it or phrase it as uncertainty.
+- Prioritize fidelity over creativity; the story should feel like an interpretation of the sources, not a new story."""
     else:
         # No persona selected, use base prompt
         if last_story:
