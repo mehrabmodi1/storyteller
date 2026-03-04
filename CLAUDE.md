@@ -49,7 +49,7 @@ Use browser tools to navigate, screenshot, click, and fill forms:
 ```
 storyteller/
 ├── storyteller_backend/    # FastAPI app
-│   ├── api/                # Routes, main.py entry point
+│   ├── api/                # main.py entry point, routes/ subdir
 │   ├── services/           # LangGraph story generation
 │   ├── models/             # Pydantic models
 │   └── .venv/              # ← Use storyteller/.venv (root), not this one
