@@ -16,9 +16,18 @@ Tests serve as feature specs. A `status: unimplemented` test is a feature reques
 
 - `/fix-tests` — read the latest full report, fix all failures, run full suite
 
+## Skill File
+
+- **Path:** `.claude/skills/fix-tests/SKILL.md`
+- **Frontmatter:**
+  ```yaml
+  name: fix-tests
+  description: "Read the latest test report, fix all failing tests (bugs and unimplemented features), verify each fix, then run the full suite for regression safety."
+  ```
+
 ## Architecture
 
-Single self-contained skill with 4 sequential phases. No inter-skill dependencies — the skill runs Playwright MCP inline rather than invoking `test-app`.
+Single self-contained skill with 4 sequential phases. No inter-skill dependencies — the skill replicates the test-running procedure from `test-app` inline rather than invoking it.
 
 ### Phase 1: Read Report
 
@@ -51,27 +60,39 @@ For each failure, sequentially:
    - For bug fixes: identify and fix the root cause
    - For unimplemented features: implement the feature as described by the test
 
-3. **Verify with single-test rerun:**
-   - Ensure servers are running (check once at start of Phase 2, not per-test)
-   - Navigate Playwright to `http://localhost:3000`
-   - Execute the test's instructions from `app-behaviors.md` using Playwright MCP
-   - Judge pass/fail based on observed behavior
-   - Vite HMR reflects code changes immediately — no server restart needed
+3. **Server readiness** (once, at start of Phase 2):
+   - Follow the same server readiness procedure as `test-app` Phase 1: curl health checks, start servers if needed, wait up to 15 seconds.
+   - Do not re-check between individual test reruns.
 
-4. **Retry on failure:**
+4. **Handle backend code changes:**
+   - Frontend changes are picked up automatically by Vite HMR — no restart needed.
+   - **Backend changes require a server restart.** After editing any file under `storyteller_backend/`, restart uvicorn before retesting:
+     ```bash
+     pkill -f "python -m api.main" 2>/dev/null; sleep 1
+     cd storyteller_backend && poetry run python -m api.main > /tmp/storyteller_backend.log 2>&1 &
+     ```
+     Wait up to 10 seconds for the health check to pass.
+
+5. **Verify with single-test rerun:**
+   - Navigate Playwright to `http://localhost:3000`
+   - **Replay prerequisite steps:** If the target test has `depends_on` dependencies, replay the necessary setup actions from those dependency tests to establish the required app state (e.g., to verify test 10 "Cancel choice node", first replay test 9's action of clicking a choice node to expand it).
+   - Execute the target test's instructions from `app-behaviors.md` using Playwright MCP
+   - Judge pass/fail based on observed behavior
+
+6. **Retry on failure:**
    - If the test still fails, analyze what went wrong and try a different approach
    - Up to **3 attempts total** per test
    - After 3 failed attempts, log as "unresolved" and move to the next failure
 
-5. **Reset between tests:**
+7. **Reset between tests:**
    - Reload the page after each single-test rerun to clear app state
 
 ### Phase 3: Full Suite Run
 
 After all individual fixes are done:
 
-1. Run the full test suite following the same procedure as the `test-app` skill (all phases: server check, browser setup, parse manifest, execute all tests, write report).
-2. Write a new timestamped report to `validation/results/<timestamp>/results.md`.
+1. Run the full test suite by replicating the `test-app` procedure inline (all phases: server check, browser setup, parse manifest, execute all tests sequentially with dependency-based skip logic, write report). Reference `test-app` SKILL.md for the exact procedure and report format.
+2. Write a new timestamped report to `validation/results/<timestamp>/results.md` using the same format as `test-app` Phase 5.
 3. Compare against the original failure list:
    - Tests that were failing and now pass → **fixed**
    - Tests that were failing and still fail → **unresolved**
@@ -96,7 +117,7 @@ Same as `test-app`:
 ## Constraints
 
 - **Sequential execution** — fixes are applied one at a time, not in parallel (code changes can conflict, and the app has shared state)
-- **Server lifecycle** — check once, don't restart between tests. HMR handles code changes.
+- **Server lifecycle** — check once at start of fix loop. Frontend HMR handles code changes. Backend requires explicit restart after edits.
 - **3-attempt cap** — prevents infinite loops on intractable failures
 - **No manual approval** — the skill operates with full autonomy; the user reviews results after completion
 

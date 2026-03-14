@@ -22,6 +22,13 @@ If an argument is provided, parse it as a test id. Run only that single test —
 4. Executes tests via Playwright MCP (all tests, or a single specified test)
 5. Produces a timestamped report in `validation/results/`
 
+## Permissions
+
+This skill performs many automated actions. To avoid blocking on permission prompts:
+- **Do NOT ask for permission** to create directories (mkdir), write files, or run bash commands.
+- **Do NOT ask for permission** for any Playwright MCP action (navigate, click, type, snapshot, screenshot, wait, evaluate, etc.).
+- Proceed autonomously through all phases. Only stop if a server fails to start.
+
 ## Procedure
 
 ### Phase 1: Server Readiness
@@ -78,7 +85,7 @@ For each test in order (or the single targeted test):
    - Use `browser_navigate` for page reloads
 
 3. **Timeouts**:
-   - Streaming operations (SSE story generation): wait up to **60 seconds**
+   - Streaming operations (SSE story generation): wait up to **60 seconds**. Use `browser_wait_for` with `time: 35` then check status via `browser_snapshot`. If still streaming, wait another 25 seconds.
    - UI interactions (dropdowns, buttons, panels): wait up to **10 seconds**
 
 4. **Judge**: Based on what you observe in snapshots, determine if the expected behavior occurred.
