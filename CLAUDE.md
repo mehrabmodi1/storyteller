@@ -15,7 +15,7 @@ Always start both servers as background processes before interacting with the ap
 
 **Backend (port 8000):**
 ```bash
-cd storyteller_backend && ../.venv/bin/uvicorn api.main:app --reload --port 8000
+cd storyteller_backend && poetry run uvicorn api.main:app --reload --port 8000
 ```
 
 **Frontend (port 3000, HMR enabled):**
@@ -48,17 +48,20 @@ Use browser tools to navigate, screenshot, click, and fill forms:
 
 ```
 storyteller/
+├── pyproject.toml          # Poetry dependency management
+├── poetry.lock             # Locked dependency tree — do not edit manually
 ├── storyteller_backend/    # FastAPI app
 │   ├── api/                # main.py entry point, routes/ subdir
 │   ├── services/           # LangGraph story generation
 │   ├── models/             # Pydantic models
-│   └── .venv/              # ← Use storyteller/.venv (root), not this one
+│   └── data/               # corpus_registry.json (chroma_db is at repo root data/)
 ├── storyteller_frontend/   # React/Vite app
 │   └── src/
 │       ├── components/     # graph/, dropdowns/, debug/
 │       ├── hooks/          # useSSE, useELKLayout, useLocalStorage
 │       ├── services/       # api.ts — all backend calls
 │       └── context/        # AppContext — global state
+├── data/                   # ChromaDB vector databases (NOT gitignored, DO NOT DELETE)
 ├── .mcp.json               # Playwright MCP config
 ├── CLAUDE.md               # This file
 └── docs/plans/             # Design docs and implementation plans
@@ -66,12 +69,16 @@ storyteller/
 
 ---
 
-## Python Environment
+## Python / Poetry Environment
 
-Root `.venv` uses Python 3.12. Always activate or reference it explicitly:
+Dependencies are managed with **Poetry 2.x**. The venv lives in Poetry's global cache.
+
 ```bash
-../.venv/bin/python      # from storyteller_backend/
-./.venv/bin/python       # from repo root
+poetry install          # install all deps (respects lockfile — safe)
+poetry add <package>    # add a new dep (explicit, auditable)
+poetry run python       # run Python in the project env
+poetry run pytest       # run tests
 ```
 
-There is also a `storyteller_backend/.venv_bk` — ignore this, it is a backup.
+**NEVER run `pip install -r requirements.txt` or `pip install` to upgrade packages.**
+ChromaDB version changes trigger database migrations that **permanently destroy embedded vector data** in `data/chroma_db/`. Always use `poetry install` or `poetry add`.
