@@ -1,0 +1,156 @@
+# Storyteller — App Behavior Tests
+
+This manifest describes the expected behaviors of the Storyteller app.
+Each test is a natural-language instruction for a Claude Code agent driving
+Playwright MCP in a headless browser. Tests declare dependencies — if a
+dependency fails, dependent tests are skipped.
+
+Username for all tests: `agent-tester`
+
+---
+
+## 1. Create username "agent-tester"
+depends_on: none
+
+Open the username dropdown, click "+ Add New", type "agent-tester", and
+press Enter. Expect the dropdown to close and the button to display
+"agent-tester".
+
+## 2. Select a persona
+depends_on: 1
+
+Open the persona dropdown and select a persona. Expect the dropdown to
+show the selected persona name and the UI theme colors to change
+(background, buttons).
+
+## 3. Select a corpus
+depends_on: 1
+
+Open the corpus dropdown and select a corpus. Expect the dropdown to show
+the selected corpus name.
+
+## 4. Verify dropdowns reflect selections
+depends_on: 1, 2, 3
+
+Take a snapshot of the page. Confirm all three dropdowns (username,
+persona, corpus) display their selected values — not default/placeholder
+text.
+
+## 5. Start a new journey
+depends_on: 1, 2, 3
+
+Type a prompt (e.g. "Tell me the story of a brave warrior who questions
+the meaning of duty") in the new journey input and click
+"Start New Journey". Expect the reading panel to open with streaming text
+and a status badge indicating streaming is in progress.
+
+## 6. Verify reading panel shows streaming text
+depends_on: 5
+
+Wait for the stream to complete (up to 60 seconds). Observe the reading
+panel. Expect accumulated story text (multiple paragraphs) and the status
+badge to change to indicate completion. Match status text loosely — do not
+rely on exact punctuation.
+
+## 7. Verify graph renders story and choice nodes
+depends_on: 5
+
+After streaming completes, take a snapshot of the graph area. Expect at
+least one story node (with narrative text) and multiple choice nodes
+connected by edges.
+
+## 8. Click a story node to open reading panel
+depends_on: 7
+status: unimplemented
+
+Click on a story node in the graph. Expect the reading panel to open
+displaying that node's story content. Note: this feature is not yet
+implemented — expected to fail until the click-to-read handler is added
+to story nodes.
+
+## 9. Click a choice node to select it
+depends_on: 7
+
+Click on a choice node in the graph. Expect the node to expand, showing
+an editable prompt textarea and "Continue Journey" / "Cancel" buttons.
+
+## 10. Cancel choice node selection
+depends_on: 9
+
+With a choice node expanded, click the "Cancel" button. Expect the node
+to collapse back to its default state — the textarea and buttons should
+disappear.
+
+## 11. Re-select choice node, edit prompt, and continue journey
+depends_on: 10
+
+Click a choice node again to expand it. Edit the text in the prompt
+textarea (e.g. append " — but tell it from the antagonist's perspective")
+and click "Continue Journey". Expect the reading panel to reopen with new
+streaming story text.
+
+## 12. Verify new story streams in reading panel
+depends_on: 11
+
+Wait for the continuation stream to complete (up to 60 seconds). Observe
+the reading panel. Expect new story text accumulating and the status badge
+showing streaming then complete.
+
+## 13. Verify graph adds new nodes
+depends_on: 11
+
+After the continuation stream completes, take a snapshot of the graph.
+Expect a new story node connected to the previously selected choice node,
+with new choice nodes branching from it. The graph should now have more
+nodes than after test 7.
+
+## 14. Reload the page
+depends_on: 5
+
+Reload the browser page to clear in-memory state. Expect the app to load
+with no username selected (dropdown shows "Select Username"), while
+persona and corpus dropdowns show their default values from the API.
+
+## 15. Select username "agent-tester" after reload
+depends_on: 14
+
+Open the username dropdown and select "agent-tester" from the list (the
+username list persists in localStorage, but no username is pre-selected
+after reload). Expect the dropdown to show "agent-tester".
+
+## 16. Verify journey dropdown shows saved journeys
+depends_on: 15
+
+After selecting the username, check that the journey dropdown loads and
+displays a list of saved journeys for "agent-tester". Expect at least one
+journey entry from the earlier test run.
+
+## 17. Load a saved journey
+depends_on: 16
+
+Select the most recent saved journey from the journey dropdown. Expect the
+graph to render with the journey's nodes and edges.
+
+## 18. Verify loaded journey graph
+depends_on: 17
+
+Take a snapshot of the loaded graph. Expect it to contain story and choice
+nodes with correct connections — the structure should match what was
+generated in the earlier test run.
+
+## 19. Attempt empty prompt submission
+depends_on: 1
+
+Clear the journey prompt input and attempt to click "Start New Journey".
+Expect the button to be disabled or the submission to be rejected — no
+stream should start and no reading panel should appear.
+
+## 20. Trigger a stream error
+depends_on: 1
+status: unimplemented
+
+Attempt to start a journey with conditions that trigger a backend error
+(e.g., select an invalid corpus if possible). Expect an error message to
+appear in the UI with a "Dismiss" button. Note: the exact trigger
+mechanism may need to be determined during implementation — this test
+tracks error handling coverage.
