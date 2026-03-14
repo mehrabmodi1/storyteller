@@ -104,48 +104,97 @@ Expect a new story node connected to the previously selected choice node,
 with new choice nodes branching from it. The graph should now have more
 nodes than after test 7.
 
-## 14. Reload the page
-depends_on: 5
+## 14. Navigate to an unexplored choice from the first story
+depends_on: 13
 
-Reload the browser page to clear in-memory state. Expect the app to load
-with no username selected (dropdown shows "Select Username"), while
-persona and corpus dropdowns show their default values from the API.
+Close the reading panel if open. Navigate or scroll back in the graph to
+the first story node's choice nodes. Identify one of the choice nodes that
+was NOT used in test 11 (i.e. not the one that led to the second story).
+Click it to expand it.
 
-## 15. Select username "agent-tester" after reload
+## 15. Start a second branch from an earlier choice
 depends_on: 14
 
-Open the username dropdown and select "agent-tester" from the list (the
-username list persists in localStorage, but no username is pre-selected
-after reload). Expect the dropdown to show "agent-tester".
+With the unexplored choice node expanded, edit the prompt if desired and
+click "Continue Journey". Expect the reading panel to open with new
+streaming text. Wait for the stream to complete (up to 60 seconds). The
+graph should now have 3 story nodes — two branching from the original
+story's choice nodes.
 
-## 16. Verify journey dropdown shows saved journeys
+## 16. Verify branching graph structure
 depends_on: 15
 
-After selecting the username, check that the journey dropdown loads and
+Take a snapshot of the graph. Expect 3 story nodes: the original story,
+plus two branches from its choice nodes. Each branch's story node should
+have its own set of choice nodes. The graph should show a tree shape, not
+a linear chain.
+
+## 17. Continue the second branch deeper
+depends_on: 16
+
+Click a choice node from the newest story (on branch 2, created in test
+15). Edit the prompt and click "Continue Journey". Wait for the stream to
+complete (up to 60 seconds). Expect a 4th story node, making branch 2
+two levels deep.
+
+## 18. Jump back to branch 1 and continue
+depends_on: 17
+
+Navigate back to branch 1 (the Aswatthaman story from test 11). Find an
+unexplored choice node from that story and click it to expand. Edit the
+prompt and click "Continue Journey". Wait for the stream to complete (up
+to 60 seconds). Expect a new story node on branch 1. The graph should now
+have 5 story nodes across 2 branches, each 2+ levels deep.
+
+## 19. Verify full graph structure
+depends_on: 18
+
+Take a snapshot of the full graph. Expect 5 story nodes with correct
+parent-child connections across both branches. Each story node should have
+choice nodes branching from it. The total edge count should reflect the
+full tree structure.
+
+## 20. Reload the page
+depends_on: 15
+
+Reload the browser page to clear in-memory state. Expect the app to load
+with username "agent-tester" pre-selected (persisted in localStorage),
+while persona resets to its default value from the API.
+
+## 21. Select username "agent-tester" after reload
+depends_on: 20
+
+Verify the username dropdown shows "agent-tester" (pre-selected from
+localStorage). If not pre-selected, select it from the dropdown.
+
+## 22. Verify journey dropdown shows saved journeys
+depends_on: 21
+
+After the username is set, check that the journey dropdown loads and
 displays a list of saved journeys for "agent-tester". Expect at least one
 journey entry from the earlier test run.
 
-## 17. Load a saved journey
-depends_on: 16
+## 23. Load a saved journey
+depends_on: 22
 
 Select the most recent saved journey from the journey dropdown. Expect the
 graph to render with the journey's nodes and edges.
 
-## 18. Verify loaded journey graph
-depends_on: 17
+## 24. Verify loaded journey graph
+depends_on: 23
 
-Take a snapshot of the loaded graph. Expect it to contain story and choice
-nodes with correct connections — the structure should match what was
-generated in the earlier test run.
+Take a snapshot of the loaded graph. Expect it to contain the full
+branching structure from the earlier test run — multiple story nodes
+across branches with correct connections.
 
-## 19. Attempt empty prompt submission
+## 25. Attempt empty prompt submission
 depends_on: 1
 
 Clear the journey prompt input and attempt to click "Start New Journey".
 Expect the button to be disabled or the submission to be rejected — no
 stream should start and no reading panel should appear.
 
-## 20. Trigger a stream error
+## 26. Trigger a stream error
 depends_on: 1
 status: unimplemented
 

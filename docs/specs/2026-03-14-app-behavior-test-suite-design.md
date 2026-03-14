@@ -78,7 +78,7 @@ Run: 2026-03-14 16:30:45
 Browser: headless Chromium 1440x900
 
 ## Summary
-Total: 20 | Passed: 16 | Failed: 2 | Skipped: 2
+Total: 26 | Passed: 21 | Failed: 3 | Skipped: 2
 
 ## Results
 
@@ -166,38 +166,64 @@ Observe the reading panel during the continuation stream. Expect new story text 
 `depends_on: 11`
 After the continuation stream completes, check the graph. Expect a new story node connected to the previously selected choice node, with new choice nodes branching from it.
 
+### Graph Navigation & Branching
+
+**14. Navigate to an unexplored choice from the first story**
+`depends_on: 13`
+Close the reading panel if open. Navigate back in the graph to the first story node's choice nodes. Identify one that was NOT used in test 11. Click it to expand.
+
+**15. Start a second branch from an earlier choice**
+`depends_on: 14`
+With the unexplored choice expanded, edit the prompt and click "Continue Journey". Wait for stream to complete. The graph should now have 3 story nodes — two branching from the original story's choice nodes.
+
+**16. Verify branching graph structure**
+`depends_on: 15`
+Take a snapshot. Expect 3 story nodes: the original, plus two branches. Each branch's story should have its own choice nodes. Tree shape, not linear.
+
+**17. Continue the second branch deeper**
+`depends_on: 16`
+Click a choice node from the newest story (branch 2). Edit and submit. Wait for stream. Expect a 4th story node, making branch 2 two levels deep.
+
+**18. Jump back to branch 1 and continue**
+`depends_on: 17`
+Navigate to branch 1's story (from test 11). Find an unexplored choice node and continue. Wait for stream. Expect a 5th story node on branch 1. Graph should now have 5 story nodes across 2 branches.
+
+**19. Verify full graph structure**
+`depends_on: 18`
+Snapshot the full graph. Expect 5 story nodes with correct parent-child connections across both branches. Each story should have choice nodes. Edge count should reflect the full tree.
+
 ### Load Saved Journey
 
-**14. Reload the page**
-`depends_on: 5`
-Reload the browser page to clear in-memory state. Expect the app to load with no username selected (dropdown shows default "Select Username"), while persona and corpus dropdowns show their default values from the API.
-
-**15. Select username "agent-tester" after reload**
-`depends_on: 14`
-Open the username dropdown and select "agent-tester" (the username list persists in localStorage, but no username is pre-selected after reload). Expect the dropdown to show "agent-tester".
-
-**16. Verify journey dropdown shows saved journeys**
+**20. Reload the page**
 `depends_on: 15`
-After selecting the username, check that the journey dropdown loads and displays a list of saved journeys for "agent-tester". Expect at least one journey entry from the earlier test run.
+Reload the browser page. Expect the app to load with username "agent-tester" pre-selected (persisted in localStorage), while persona resets to default.
 
-**17. Load a saved journey**
-`depends_on: 16`
-Select the most recent saved journey from the journey dropdown. Expect the graph to render with the journey's nodes and edges.
+**21. Select username "agent-tester" after reload**
+`depends_on: 20`
+Verify the username dropdown shows "agent-tester" (pre-selected from localStorage). If not pre-selected, select it from the dropdown.
 
-**18. Verify loaded journey graph**
-`depends_on: 17`
-Inspect the loaded graph. Expect it to contain the story and choice nodes from the earlier test run, with correct connections.
+**22. Verify journey dropdown shows saved journeys**
+`depends_on: 21`
+Check that the journey dropdown loads and displays saved journeys for "agent-tester". Expect at least one entry.
+
+**23. Load a saved journey**
+`depends_on: 22`
+Select the most recent saved journey. Expect the graph to render with the journey's nodes and edges.
+
+**24. Verify loaded journey graph**
+`depends_on: 23`
+Snapshot the loaded graph. Expect the full branching structure from the earlier test run — multiple story nodes across branches with correct connections.
 
 ### Error Handling
 
-**19. Attempt empty prompt submission**
+**25. Attempt empty prompt submission**
 `depends_on: 1`
 Clear the journey prompt input and attempt to click "Start New Journey". Expect the button to be disabled or the submission to be rejected — no stream should start.
 
-**20. Trigger a stream error**
+**26. Trigger a stream error**
 `depends_on: 1`
 `status: unimplemented`
-Attempt to start a journey with conditions that trigger a backend error (e.g., select an invalid corpus if possible, or test with servers in a known error state). Expect an error message to appear in the UI with a "Dismiss" button. Note: the exact trigger mechanism may need to be determined during implementation — this test tracks error handling coverage.
+Attempt to start a journey with conditions that trigger a backend error (e.g., select an invalid corpus if possible). Expect an error message to appear in the UI with a "Dismiss" button. Note: the exact trigger mechanism may need to be determined during implementation.
 
 ## Decisions
 
