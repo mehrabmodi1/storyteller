@@ -20,9 +20,9 @@ langchain-core = "0.3.28"
 langgraph = "0.2.59"
 openai = "1.58.1"
 chromadb = "1.3.7"
-chroma-migrate = "0.0.7"
 rank-bm25 = "0.2.2"
 networkx = "3.4.2"
+onnxruntime = ">=1.23.0,<1.24"  # pin: 1.24+ lacks macOS arm64 wheels
 
 [tool.poetry.group.dev.dependencies]
 pytest = "8.3.4"
