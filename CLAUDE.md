@@ -15,7 +15,12 @@ Always start both servers as background processes before interacting with the ap
 
 **Backend (port 8000):**
 ```bash
-cd storyteller_backend && poetry run uvicorn api.main:app --reload --port 8000
+cd storyteller_backend && poetry run python -m api.main
+```
+If `poetry run` fails with `No such file or directory: 'python'` (common in sandboxed shells), resolve the venv python directly:
+```bash
+VENV_PYTHON=$(poetry config virtualenvs.path)/$(ls $(poetry config virtualenvs.path) | grep storyteller)/bin/python
+cd storyteller_backend && $VENV_PYTHON -m api.main
 ```
 
 **Frontend (port 3000, HMR enabled):**
