@@ -92,7 +92,7 @@ For each test in order (or the single targeted test):
 4. **Judge**: Based on what you observe in snapshots, determine if the expected behavior occurred.
    - For `status: unimplemented` tests: a failure is expected. Still report what happened but mark as ✗ FAIL (expected).
 
-5. **On failure**: Take a screenshot and save it to the results folder. Zero-pad the test id to 3 digits:
+5. **Screenshot**: After judging each test (pass or fail), take a screenshot and save it to the results folder. Zero-pad the test id to 3 digits:
    ```
    validation/results/<timestamp>/<NNN>-<title-slug>.png
    ```
@@ -114,6 +114,7 @@ Total: N | Passed: N | Failed: N | Skipped: N
 
 ### 1. Create username "agent-tester" — ✓ PASS
 [Description of what was done and what was observed]
+See: 001-create-username.png
 
 ### N. Test title — ✗ FAIL
 [Description of what was done, what was observed, how it differed from expectation]
@@ -127,7 +128,7 @@ Each result entry MUST include:
 - Test id and title
 - Status symbol: ✓ PASS, ✗ FAIL, or ⊘ SKIP
 - Natural-language description of what the agent did and observed
-- Screenshot filename on failure
+- Screenshot filename (for every executed test, not just failures)
 
 ### Phase 6: Summary
 
