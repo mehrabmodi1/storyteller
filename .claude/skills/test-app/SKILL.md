@@ -115,6 +115,7 @@ For each test in order (or the single targeted test):
    - Dropdown loading (personas, corpuses, journeys): after page load, use `browser_wait_for` with `time: 3` before interacting with dropdowns
 
 4. **Judge**: **Take a screenshot and visually inspect it** to determine if the expected behavior occurred. Do NOT rely on `browser_snapshot` for pass/fail decisions.
+   - **STRICT PASS/FAIL RULE**: ANY divergence from the expected behavior described in the test instructions is a FAIL. No exceptions. If the test says "edit the prompt text" and the text doesn't change in the screenshot, that's a FAIL — even if the DOM shows the new text. If the test says "nodes should remain visible" and they disappear in the screenshot, that's a FAIL. Do not rationalize partial successes. Do not speculate about causes — just describe exactly what you see in the screenshot and how it differs from what was expected.
    - For `status: unimplemented` tests: a failure is expected. Still report what happened but mark as ✗ FAIL (expected).
 
 5. **Save screenshot**: Save the screenshot to the results folder. Zero-pad the test id to 3 digits:

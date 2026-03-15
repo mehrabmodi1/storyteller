@@ -9,12 +9,12 @@ Username for all tests: `agent-tester`
 
 ---
 
-## 1. Create username "agent-tester"
+## 1. Activate username "agent-tester"
 depends_on: none
 
-Open the username dropdown, click "+ Add New", type "agent-tester", and
-press Enter. Expect the dropdown to close and the button to display
-"agent-tester".
+Open the username dropdown. If "agent-tester" already appears in the list,
+select it. If not, click "+ Add New", type "agent-tester", and press Enter.
+Expect the dropdown to close and the button to display "agent-tester".
 
 ## 2. Select a persona
 depends_on: 1
@@ -61,7 +61,6 @@ connected by edges.
 
 ## 8. Click a story node to open reading panel
 depends_on: 7
-status: unimplemented
 
 Click on a story node in the graph. Expect the reading panel to open
 displaying that node's story content. Note: this feature is not yet
