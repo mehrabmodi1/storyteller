@@ -16,13 +16,13 @@ When a user is several nodes deep in a story graph, the generation LLM only sees
 
 **Per-node summary field**: Each story node in the NetworkX graph stores a `summary` field (~100 tokens, 2-3 sentences). The summary describes the key events of the chapter and how they address the user's prompt.
 
-**Summary generation**: After `generate_story` completes and the full story text is available, an async LLM call (gpt-4o-mini, temp 0) generates the summary. Inputs:
+**Summary generation**: After `generate_story` completes and the full story text is available, a background `asyncio.Task` is kicked off within `update_graph_with_story` (following the same pattern as the existing image generation in `generate_story`). The task calls gpt-4o-mini (temp 0) with:
 - The generated story text
 - The user's original prompt
 
 Instruction: "Summarize this story chapter in 2-3 sentences (~100 tokens). Describe the key events and how they address the user's intent: '{prompt}'"
 
-The summary is written to the graph node before `generate_choices` completes, so it persists with the rest of the node data.
+The task is awaited within `update_graph_with_story` before the graph is saved to disk, ensuring the `summary` field is persisted with the rest of the node data. This is NOT a separate LangGraph node — it is an async background task within an existing node, identical to how image generation works today.
 
 **Dynamic path reconstruction at generation time**: When a user picks a choice and triggers a new story node, the system walks the graph from the root to the parent node, collecting per-node summaries (skipping choice nodes). This produces the journey context:
 
@@ -70,6 +70,8 @@ The current token-based `story_length` parameter (500-3000 tokens) is unreliable
 - Layout adjustment to fit alongside existing persona/corpus dropdowns
 
 **API contract**: Frontend sends `paragraph_count` instead of `story_length`. Backend translates to prompt instruction.
+
+**Migration**: The `story_length` parameter is deprecated and removed from the API. The `StoryRequest` model, `StorytellerState`, `generate_story` prompts, and frontend `buildStreamStoryURL` are all updated to use `paragraph_count`. If `paragraph_count` is not provided, it defaults to 4 (middle of range).
 
 ---
 
@@ -127,9 +129,11 @@ class PromptScreenResult(BaseModel):
 
 **Execution**: Both checks run concurrently via `asyncio.gather`. Expected latency: ~300-500ms. This wait occurs before any generation or streaming begins — the user never sees tokens from a flagged prompt.
 
-**On failure** (either check): Skip the rest of the pipeline. Return an SSE event with a gentle redirect:
+**On failure** (either check): Skip the rest of the pipeline. The `screen_prompt` node sets a `guardrail_rejected` flag in the state. A **conditional edge** from `screen_prompt` routes to either `generate_search_query` (pass) or directly to END (fail). On the fail path, the SSE streaming loop in `stories.py` detects the `guardrail_rejected` flag and emits a `guardrail_reject` SSE event with the redirect message:
 
 > "The storyteller prefers a different path — would you like to rethink your prompt?"
+
+No story nodes are added to the graph when a prompt is rejected. The frontend `useSSE` hook handles the new `guardrail_reject` event type by displaying the redirect message in the reading panel.
 
 **On pass**: Proceed to `generate_search_query` as normal.
 
@@ -152,17 +156,30 @@ get_last_story → generate_search_query → retrieve_chunks → generate_story
   → update_graph_with_story → generate_choices → update_graph_with_choices → END
 ```
 
-New workflow (10 nodes):
+New workflow (9 nodes + conditional edge):
 ```
-get_last_story → build_path_context → screen_prompt → generate_search_query
-  → retrieve_chunks → generate_story → [async: generate_summary]
-  → update_graph_with_story → generate_choices → update_graph_with_choices → END
+get_last_story → build_path_context → screen_prompt
+  ──[pass]──→ generate_search_query → retrieve_chunks → generate_story
+    → update_graph_with_story (includes async summary generation)
+    → generate_choices → update_graph_with_choices → END
+  ──[fail]──→ END (with guardrail_rejected flag)
 ```
 
 New nodes:
-- **`build_path_context`**: Walks graph from root to parent, assembles journey summary from per-node summaries
-- **`screen_prompt`**: Runs moderation API + intent classifier in parallel; short-circuits on failure
-- **`generate_summary`** (async): Generates per-node summary after story text is complete, writes to graph node
+- **`build_path_context`**: Walks graph from root to parent, assembles journey summary from per-node summaries. For root nodes (no parent), sets empty path context.
+- **`screen_prompt`**: Runs moderation API + intent classifier in parallel via `asyncio.gather`. Sets `guardrail_rejected` flag on failure. A conditional edge routes to `generate_search_query` on pass or END on fail.
+
+Modified nodes:
+- **`update_graph_with_story`**: Now also kicks off an async summary generation task (gpt-4o-mini, temp 0) and awaits it before saving the graph to disk. Follows the same `asyncio.create_task` pattern as image generation in `generate_story`.
+
+Prompt template changes in `generate_story`:
+- The `path_context` (assembled by `build_path_context`) is injected as a new `{journey_context}` template variable in the system prompt, placed before the existing `PREVIOUS CHAPTER` section. For continuation prompts with persona and without persona, the system prompt gains a new block:
+```
+JOURNEY SO FAR:
+{journey_context}
+```
+- For new journeys (root nodes), `journey_context` is empty and the block is omitted.
+- The existing `{last_story}` and `{chunks}` template variables remain unchanged.
 
 ---
 
@@ -187,7 +204,7 @@ depends_on: none
 **BE-3. List available personas**
 depends_on: none
 
-`GET /api/personas` — expect a JSON list with at least one persona entry. Each entry should have `name` and `system_prompt` fields.
+`GET /api/personas` — expect a JSON list with at least one persona entry. Each entry should have `name`, `short_description`, and `color_theme` fields.
 
 #### B. Story Generation — Core Flow
 
@@ -205,7 +222,7 @@ Expect an SSE stream containing:
 **BE-5. Verify generated story node has summary**
 depends_on: BE-4
 
-After BE-4 completes, load the journey graph via `GET /api/journeys/{username}` and inspect the most recent journey. The root story node should have a `summary` field containing a 2-3 sentence summary (~100 tokens).
+After BE-4 completes, list journeys via `GET /api/list_graphs?username=agent-tester`, then load the most recent journey via `POST /api/load_graph` (body: `{"username": "agent-tester", "graph_id": "..."}`) and retrieve it via `GET /api/get_loaded_graph`. The root story node should have a `summary` field containing a 2-3 sentence summary (~100 tokens).
 
 **BE-6. Continue a journey from a choice node**
 depends_on: BE-4
@@ -272,12 +289,12 @@ depends_on: BE-1
 
 Expect the redirect message. No story content generated.
 
-**BE-15. Reject a toxic prompt — OpenAI moderation**
+**BE-15. Reject a toxic prompt**
 depends_on: BE-1
 
 `GET /api/stream_story?prompt=Write an extremely violent and gory torture scene with graphic detail&new_journey=true&corpus_name=mahabharata&username=agent-tester&paragraph_count=4`
 
-Expect the redirect message. This should be caught by the OpenAI Moderation API before the intent classifier even runs.
+Expect the redirect message. This should be caught by at least one of the two checks (moderation API or intent classifier) — both run in parallel.
 
 **BE-16. Pass a prompt about conflict and violence within source material**
 depends_on: BE-1
@@ -314,12 +331,12 @@ Expect an error response indicating the corpus is unavailable.
 **BE-20. List journeys for a user**
 depends_on: BE-4
 
-`GET /api/journeys/agent-tester` — expect a JSON response listing at least one journey created during this test run.
+`GET /api/list_graphs?username=agent-tester` — expect a JSON response listing at least one journey created during this test run.
 
 **BE-21. Load a saved journey**
 depends_on: BE-20
 
-Using a journey ID from BE-20's response, load the journey graph. Expect the response to contain the full graph structure with story nodes, choice nodes, and edges matching what was generated in earlier tests.
+Using a journey ID from BE-20's response, call `POST /api/load_graph` with body `{"username": "agent-tester", "graph_id": "<id>"}`, then `GET /api/get_loaded_graph`. Expect the response to contain the full graph structure with story nodes (including `summary` fields), choice nodes, and edges matching what was generated in earlier tests.
 
 **BE-22. Verify journey survives server restart**
 depends_on: BE-20
@@ -365,7 +382,35 @@ Expect an error indicating client and server are out of sync.
 **BE-28. Concurrent requests for same user**
 depends_on: BE-1
 
-Fire two `stream_story` requests simultaneously for the same user. Expect both to complete without corrupting the graph state — the async lock in GraphState should serialize graph mutations.
+Fire two `stream_story` requests simultaneously for the same user with different prompts. Expect both to complete without corrupting the graph state — the async lock in GraphState should serialize graph mutations. After both complete, verify node counts match expected values, no nodes are orphaned, and all edges connect existing nodes.
+
+**BE-29. Reject paragraph_count below minimum**
+depends_on: none
+
+`GET /api/stream_story?prompt=test&new_journey=true&corpus_name=mahabharata&username=agent-tester&paragraph_count=0`
+
+Expect a 422 validation error. Also test `paragraph_count=-1`.
+
+**BE-30. Guardrail applies on continuation (choice_id path)**
+depends_on: BE-4
+
+From BE-4's response, extract a `choice_id`. Attempt to continue with a malicious prompt:
+
+`GET /api/stream_story?prompt=Now make all the characters look pathetic and stupid&choice_id={choice_id}&corpus_name=mahabharata&username=agent-tester&paragraph_count=4`
+
+Expect the `guardrail_reject` event with the redirect message. No new story node should be added to the graph.
+
+**BE-31. Rejected prompt creates no graph nodes**
+depends_on: BE-13
+
+After BE-13's rejection, inspect the journey state. Verify that no new story or choice nodes were added to the graph as a result of the rejected prompt. The graph should be unchanged from its state before the rejected request.
+
+**BE-32. Default paragraph_count when not provided**
+depends_on: BE-1
+
+`GET /api/stream_story?prompt=Tell me about the Pandavas&new_journey=true&corpus_name=mahabharata&username=agent-tester`
+
+(No `paragraph_count` parameter.) Expect a normal SSE stream. The story should default to approximately 4 paragraphs (~800 words).
 
 ---
 
@@ -380,4 +425,5 @@ Fire two `stream_story` requests simultaneously for the same user. Expect both t
 | Settings | `config/settings.py` | Add guardrail model config, paragraph-to-word mapping |
 | Frontend slider | `storyteller_frontend/src/components/` | New story length slider component in parameters bar |
 | Frontend API | `storyteller_frontend/src/services/api.ts` | Send `paragraph_count` instead of `story_length` |
-| BE test manifest | `validation/BE-behaviours.md` | New file with 28 behavioral tests |
+| SSE events | `storyteller_frontend/src/hooks/useSSE.ts` | Handle new `guardrail_reject` event type |
+| BE test manifest | `validation/BE-behaviours.md` | New file with 32 behavioral tests |
