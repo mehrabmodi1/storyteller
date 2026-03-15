@@ -69,9 +69,17 @@ export function useSSE(url: string | null): UseSSEResult {
       }
     };
     
-    // Handle errors
-    const handleError = (event: Event) => {
-      console.error('SSE error:', event);
+    // Handle backend error events (event: error with data)
+    const handleBackendError = (event: MessageEvent) => {
+      console.error('SSE backend error:', event.data);
+      setError(new Error(event.data || 'Stream error'));
+      eventSource.close();
+      setIsStreaming(false);
+    };
+
+    // Handle connection errors (native EventSource error)
+    const handleConnectionError = (event: Event) => {
+      console.error('SSE connection error:', event);
       setError(new Error('Stream connection failed'));
       eventSource.close();
       setIsStreaming(false);
@@ -89,7 +97,8 @@ export function useSSE(url: string | null): UseSSEResult {
     eventSource.addEventListener('message', handleGraph);
     eventSource.addEventListener('graph_data', handleGraph);
     eventSource.addEventListener('end', handleEnd);
-    eventSource.addEventListener('error', handleError);
+    eventSource.addEventListener('error', handleBackendError as EventListener);
+    eventSource.onerror = handleConnectionError;
     
     // Cleanup on unmount or URL change
     return () => {

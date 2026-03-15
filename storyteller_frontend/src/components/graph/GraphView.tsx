@@ -50,6 +50,7 @@ const defaultEdgeOptions: DefaultEdgeOptions = {
 interface GraphCanvasProps {
   graph: TransformedGraph | null;
   onSelectChoice?: (nodeId: string) => void;
+  onSelectStoryNode?: (nodeId: string) => void;
   activeChoiceId?: string | null;
   editablePrompt?: string;
   onChangePrompt?: (value: string) => void;
@@ -60,6 +61,7 @@ interface GraphCanvasProps {
 function GraphCanvasInner({
   graph,
   onSelectChoice,
+  onSelectStoryNode,
   onCancelEdit,
 }: GraphCanvasProps) {
   const reactFlowInstance = useReactFlow();
@@ -74,11 +76,12 @@ function GraphCanvasInner({
 
   const handleNodeClick = useCallback(
     (_event: MouseEvent, node: StoryReactFlowNode) => {
-      if (node.type === 'choiceNode') {
-        onSelectChoice?.(node.id);
+      if (node.type === 'storyNode') {
+        onSelectStoryNode?.(node.id);
       }
+      // choiceNode clicks are handled by ChoiceNode's own onClick
     },
-    [onSelectChoice],
+    [onSelectStoryNode],
   );
 
   const handlePaneClick = useCallback(() => {
@@ -184,7 +187,7 @@ export function GraphView(props: GraphCanvasProps) {
             editablePrompt,
             onChangePrompt,
             onSubmitPrompt,
-            onCancelEdit,
+            onCancel: onCancelEdit,
             onSelectChoice,
           },
         },

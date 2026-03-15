@@ -26,6 +26,7 @@ function AppContent() {
   const [activeChoiceId, setActiveChoiceId] = useState<string | null>(null);
   const [activeChoicePrompt, setActiveChoicePrompt] = useState<string>('');
   const [journeyError, setJourneyError] = useState<string | null>(null);
+  const [viewingStoryText, setViewingStoryText] = useState<string | null>(null);
   const { graphData: streamingGraph, isStreaming, error: streamError, closeStream, streamingText } = useSSE(streamUrl);
 
   const journeyPersonaTheme = useMemo<ColorTheme>(() => {
@@ -76,6 +77,7 @@ function AppContent() {
 
   useEffect(() => {
     if (isStreaming) {
+      setViewingStoryText(null);
       setShowReadingPanel(true);
     }
   }, [isStreaming]);
@@ -107,6 +109,15 @@ function AppContent() {
   const handleCancelChoiceEdit = () => {
     setActiveChoiceId(null);
     setActiveChoicePrompt('');
+  };
+
+  const handleSelectStoryNode = (nodeId: string) => {
+    const storyNode = rawGraph?.nodes.find((n) => n.id === nodeId);
+    if (storyNode) {
+      setCurrentStoryTitle(storyNode.label);
+      setViewingStoryText(storyNode.story ?? null);
+      setShowReadingPanel(true);
+    }
   };
 
   const handleSubmitContinuation = () => {
@@ -201,15 +212,13 @@ function AppContent() {
             {journeyError ? (
               <p className="text-sm text-red-400">
                 Failed to start journey: {journeyError}
-                {streamError ? (
-                  <button
-                    type="button"
-                    onClick={closeStream}
-                    className="ml-3 underline text-red-200 hover:text-red-100"
-                  >
-                    Dismiss
-                  </button>
-                ) : null}
+                <button
+                  type="button"
+                  onClick={() => { setJourneyError(null); closeStream(); }}
+                  className="ml-3 underline text-red-200 hover:text-red-100"
+                >
+                  Dismiss
+                </button>
               </p>
             ) : null}
           </div>
@@ -220,6 +229,7 @@ function AppContent() {
           <GraphView
             graph={layoutGraph}
             onSelectChoice={handleSelectChoice}
+            onSelectStoryNode={handleSelectStoryNode}
             activeChoiceId={activeChoiceId}
             editablePrompt={activeChoicePrompt}
             onChangePrompt={setActiveChoicePrompt}
@@ -250,12 +260,12 @@ function AppContent() {
           </div>
         )}
         <ReadingPanel
-          open={showReadingPanel && (isStreaming || !!streamingText)}
+          open={showReadingPanel && (isStreaming || !!streamingText || !!viewingStoryText)}
           isStreaming={isStreaming}
-          text={streamingText}
+          text={viewingStoryText ?? streamingText}
           title={currentStoryTitle}
           themeInputClass={journeyPersonaTheme?.input}
-          onClose={() => setShowReadingPanel(false)}
+          onClose={() => { setShowReadingPanel(false); setViewingStoryText(null); }}
         />
       </div>
     </div>

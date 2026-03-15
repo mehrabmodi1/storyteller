@@ -86,14 +86,14 @@ export const ChoiceNode: React.FC<NodeProps<ChoiceNodeData>> = ({ id, data, sele
             <div className="flex items-center justify-end gap-2">
               <button
                 type="button"
-                onClick={onCancel}
+                onClick={(e) => { e.stopPropagation(); onCancel?.(); }}
                 className="text-xs text-white/70 hover:text-white underline"
               >
                 Cancel
               </button>
               <button
                 type="button"
-                onClick={onSubmitPrompt}
+                onClick={(e) => { e.stopPropagation(); onSubmitPrompt?.(); }}
                 className="text-sm px-3 py-2 rounded-lg font-semibold bg-white text-gray-900 hover:bg-gray-200"
               >
                 Continue Journey
