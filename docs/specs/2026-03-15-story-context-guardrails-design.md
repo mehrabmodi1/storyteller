@@ -71,7 +71,7 @@ The current token-based `story_length` parameter (500-3000 tokens) is unreliable
 
 **API contract**: Frontend sends `paragraph_count` instead of `story_length`. Backend translates to prompt instruction.
 
-**Migration**: The `story_length` parameter is deprecated and removed from the API. The `StoryRequest` model, `StorytellerState`, `generate_story` prompts, and frontend `buildStreamStoryURL` are all updated to use `paragraph_count`. If `paragraph_count` is not provided, it defaults to 4 (middle of range).
+**Migration**: The `story_length` parameter will be deprecated and removed from the API. The `StoryRequest` model, `StorytellerState`, `generate_story` prompts, and frontend `buildStreamStoryURL` are all updated to use `paragraph_count`. If `paragraph_count` is not provided, it defaults to 4 (middle of range).
 
 ---
 
@@ -418,7 +418,7 @@ depends_on: BE-1
 
 | Area | File(s) | Change |
 |------|---------|--------|
-| LangGraph workflow | `services/story_agent.py` | Add `build_path_context`, `screen_prompt`, `generate_summary` nodes |
+| LangGraph workflow | `services/story_agent.py` | Add `build_path_context`, `screen_prompt` nodes; add async summary task in `update_graph_with_story` |
 | Story node model | `models/state.py` | Add `summary` field to state; add `path_context` field |
 | Guardrail models | `models/api_models.py` | Add `PromptScreenResult` schema |
 | API route | `api/routes/stories.py` | Accept `paragraph_count` param, handle guardrail rejection SSE event |
