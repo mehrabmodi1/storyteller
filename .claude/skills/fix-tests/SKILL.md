@@ -31,6 +31,29 @@ This skill performs many automated actions. To avoid blocking on permission prom
 - **Do NOT ask for permission** to edit code files (frontend or backend).
 - Proceed autonomously through all phases. Only stop if a server fails to start or all retries are exhausted.
 
+## CRITICAL: Interaction Rules — Simulate a Real User
+
+The agent MUST interact with the app exactly as a human user would. This is non-negotiable.
+
+### Assertions: Screenshots Only
+
+- **NEVER use `browser_snapshot` to judge whether a test passed or failed.** Snapshots read the DOM/accessibility tree directly, which can show state that isn't visually rendered or hide bugs that are visually apparent.
+- **ALWAYS use `browser_take_screenshot`** and visually inspect the screenshot image to determine what the app looks like and whether the expected behavior occurred.
+- `browser_snapshot` may ONLY be used for one purpose: **finding element `ref` values** needed to target clicks, typing, and other interactions. Never use it for assertions.
+
+### Text Input: Real Keystrokes
+
+- **NEVER use `browser_type` with `slowly: false` (the default) or `browser_fill_form`** for typing into text fields. These methods set the value atomically, bypassing keystroke event handlers and masking real input bugs.
+- **ALWAYS use `browser_type` with `slowly: true`** to type one character at a time, triggering the same key events a real user would.
+- Exception: for long prompts (>100 chars), you may use regular `browser_type` for speed, but then verify the field content via screenshot.
+
+### Clicking and Navigation
+
+- Use `browser_click` for all interactions — this simulates real mouse clicks.
+- Use `browser_press_key` for keyboard actions (Enter, Escape, etc.).
+- Use `browser_navigate` for page loads/reloads.
+- Do NOT use `browser_evaluate` to programmatically trigger actions (e.g. `element.click()` via JS). The agent must click via the Playwright input pipeline, not the DOM API.
+
 ## Procedure
 
 ### Phase 1: Read Report
@@ -108,20 +131,22 @@ Wait up to 15 seconds for both to become healthy. If either fails to start, abor
 
 **d) Verify with single-test rerun:**
 - Navigate Playwright to `http://localhost:3000`
-- Wait for the app to load (look for "Story Controls" heading)
+- Wait for the app to load — take a screenshot to confirm "Story Controls" heading is visible
 - **Replay prerequisite steps:** If the target test has `depends_on` dependencies, replay the necessary setup actions from those dependency tests to establish the required app state. For example:
   - To verify test 10 (Cancel choice node), first replay test 1 (create/select username), test 2 (select persona), test 3 (select corpus), test 5 (start journey, wait for stream), and test 9 (click a choice node to expand it)
   - Only replay the minimum chain needed — follow the `depends_on` path
 - Execute the target test's instructions using Playwright MCP tools:
-  - Use `browser_snapshot` to read page state (preferred over screenshots for assertions)
-  - Use `browser_click`, `browser_fill_form`, `browser_type`, `browser_press_key` to interact
-  - Use `browser_wait_for` when waiting for elements to appear
+  - Use `browser_snapshot` ONLY to find element refs for clicking/typing targets
+  - Use `browser_click` to click elements (by ref)
+  - Use `browser_type` with `slowly: true` for all text input
+  - Use `browser_press_key` for keyboard actions
+  - Use `browser_wait_for` when waiting for elements or time to pass
   - Use `browser_navigate` for page reloads
 - **Timeouts:**
-  - Streaming operations (SSE story generation): wait up to **60 seconds**. **IMPORTANT: Do NOT use `browser_wait_for` with a `text` parameter for streaming — it has a 5-second default timeout that will expire before the stream finishes.** Instead, use `browser_wait_for` with `time: 40` (a pure time-based wait), then check status via `browser_snapshot`. If still streaming, wait another 20 seconds with `time: 20` and re-check.
+  - Streaming operations (SSE story generation): wait up to **60 seconds**. **IMPORTANT: Do NOT use `browser_wait_for` with a `text` parameter for streaming — it has a 5-second default timeout that will expire before the stream finishes.** Instead, use `browser_wait_for` with `time: 40` (a pure time-based wait), then take a screenshot to check if streaming is complete. If still streaming, wait another 20 seconds with `time: 20` and screenshot again.
   - UI interactions (dropdowns, buttons, panels): wait up to **10 seconds**
   - Dropdown loading (personas, corpuses, journeys): after page load, use `browser_wait_for` with `time: 3` before interacting with dropdowns
-- Judge pass/fail based on observed behavior
+- **Judge pass/fail by taking a screenshot and visually inspecting it** — not by reading the DOM snapshot
 
 **e) On failure (retry):**
 - If the test still fails, analyze what went wrong
@@ -136,15 +161,15 @@ Wait up to 15 seconds for both to become healthy. If either fails to start, abor
 
 After all individual fixes are done, run the complete test suite to catch regressions.
 
-Follow the exact same procedure as the `test-app` skill (reference `.claude/skills/test-app/SKILL.md`):
+Follow the exact same procedure as the `test-app` skill (reference `.claude/skills/test-app/SKILL.md`), including all interaction rules (screenshots for assertions, `slowly: true` for typing, no `browser_evaluate` for actions):
 
 1. **Server readiness** — curl health checks, start if needed
-2. **Browser setup** — navigate to `http://localhost:3000`, confirm app loaded
+2. **Browser setup** — navigate to `http://localhost:3000`, confirm app loaded via screenshot
 3. **Parse manifest** — read `validation/app-behaviors.md`, extract all tests
 4. **Execute all tests** sequentially with dependency-based skip logic:
    - If a dependency failed or was skipped → mark as ⊘ SKIP
-   - Otherwise execute via Playwright MCP, judge pass/fail
-   - On failure: save screenshot to results folder
+   - Otherwise execute via Playwright MCP, judge pass/fail via screenshots
+   - Save screenshot for every executed test
 5. **Write report** — save to `validation/results/<timestamp>/results.md` with this format:
    ```markdown
    # App Behavior Test Report
@@ -157,7 +182,8 @@ Follow the exact same procedure as the `test-app` skill (reference `.claude/skil
    ## Results
 
    ### N. Test title — ✓ PASS / ✗ FAIL / ⊘ SKIP
-   [Description of what was done and observed]
+   [Description of what was done and observed in the screenshot]
+   See: NNN-title-slug.png
    ```
 
 6. **Compare** against the original failure list from Phase 1:

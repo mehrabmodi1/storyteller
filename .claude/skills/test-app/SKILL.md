@@ -29,6 +29,29 @@ This skill performs many automated actions. To avoid blocking on permission prom
 - **Do NOT ask for permission** for any Playwright MCP action (navigate, click, type, snapshot, screenshot, wait, evaluate, etc.).
 - Proceed autonomously through all phases. Only stop if a server fails to start.
 
+## CRITICAL: Interaction Rules — Simulate a Real User
+
+The agent MUST interact with the app exactly as a human user would. This is non-negotiable.
+
+### Assertions: Screenshots Only
+
+- **NEVER use `browser_snapshot` to judge whether a test passed or failed.** Snapshots read the DOM/accessibility tree directly, which can show state that isn't visually rendered or hide bugs that are visually apparent.
+- **ALWAYS use `browser_take_screenshot`** and visually inspect the screenshot image to determine what the app looks like and whether the expected behavior occurred.
+- `browser_snapshot` may ONLY be used for one purpose: **finding element `ref` values** needed to target clicks, typing, and other interactions. Never use it for assertions.
+
+### Text Input: Real Keystrokes
+
+- **NEVER use `browser_type` with `slowly: false` (the default) or `browser_fill_form`** for typing into text fields. These methods set the value atomically, bypassing keystroke event handlers and masking real input bugs.
+- **ALWAYS use `browser_type` with `slowly: true`** to type one character at a time, triggering the same key events a real user would.
+- Exception: for long prompts (>100 chars), you may use regular `browser_type` for speed, but then verify the field content via screenshot.
+
+### Clicking and Navigation
+
+- Use `browser_click` for all interactions — this simulates real mouse clicks.
+- Use `browser_press_key` for keyboard actions (Enter, Escape, etc.).
+- Use `browser_navigate` for page loads/reloads.
+- Do NOT use `browser_evaluate` to programmatically trigger actions (e.g. `element.click()` via JS). The agent must click via the Playwright input pipeline, not the DOM API.
+
 ## Procedure
 
 ### Phase 1: Server Readiness
@@ -54,7 +77,7 @@ Wait up to 15 seconds for both to become healthy. If either fails to start, abor
 
 ### Phase 2: Browser Setup
 
-Navigate Playwright to `http://localhost:3000`. Take a snapshot to confirm the app loaded (look for "Story Controls" heading).
+Navigate Playwright to `http://localhost:3000`. Take a screenshot to confirm the app loaded (look for "Story Controls" heading visible in the image).
 
 ### Phase 3: Parse Manifest
 
@@ -79,20 +102,22 @@ For each test in order (or the single targeted test):
 1. **Check dependencies** (skip this step if running a single test via `/test-app N`): If any dependency has status FAIL or SKIP, mark this test as ⊘ SKIP with reason "blocked by: N, M". Note: transitivity is handled naturally — a skipped test causes its dependents to skip too, cascading through the chain.
 
 2. **Execute**: Follow the natural-language instructions using Playwright MCP tools:
-   - Use `browser_snapshot` to read page state (preferred over screenshots for assertions)
-   - Use `browser_click`, `browser_fill_form`, `browser_type`, `browser_press_key` to interact
-   - Use `browser_wait_for` when waiting for elements to appear
+   - Use `browser_snapshot` ONLY to find element refs for clicking/typing targets
+   - Use `browser_click` to click elements (by ref)
+   - Use `browser_type` with `slowly: true` for all text input
+   - Use `browser_press_key` for keyboard actions
+   - Use `browser_wait_for` when waiting for elements or time to pass
    - Use `browser_navigate` for page reloads
 
 3. **Timeouts**:
-   - Streaming operations (SSE story generation): wait up to **60 seconds**. **IMPORTANT: Do NOT use `browser_wait_for` with a `text` parameter for streaming — it has a 5-second default timeout that will expire before the stream finishes.** Instead, use `browser_wait_for` with `time: 40` (a pure time-based wait), then check status via `browser_snapshot`. If the snapshot still shows "Streaming", wait another 20 seconds with `time: 20` and re-check.
+   - Streaming operations (SSE story generation): wait up to **60 seconds**. **IMPORTANT: Do NOT use `browser_wait_for` with a `text` parameter for streaming — it has a 5-second default timeout that will expire before the stream finishes.** Instead, use `browser_wait_for` with `time: 40` (a pure time-based wait), then take a screenshot to check if streaming is complete. If still streaming, wait another 20 seconds with `time: 20` and screenshot again.
    - UI interactions (dropdowns, buttons, panels): wait up to **10 seconds**
    - Dropdown loading (personas, corpuses, journeys): after page load, use `browser_wait_for` with `time: 3` before interacting with dropdowns
 
-4. **Judge**: Based on what you observe in snapshots, determine if the expected behavior occurred.
+4. **Judge**: **Take a screenshot and visually inspect it** to determine if the expected behavior occurred. Do NOT rely on `browser_snapshot` for pass/fail decisions.
    - For `status: unimplemented` tests: a failure is expected. Still report what happened but mark as ✗ FAIL (expected).
 
-5. **Screenshot**: After judging each test (pass or fail), take a screenshot and save it to the results folder. Zero-pad the test id to 3 digits:
+5. **Save screenshot**: Save the screenshot to the results folder. Zero-pad the test id to 3 digits:
    ```
    validation/results/<timestamp>/<NNN>-<title-slug>.png
    ```
@@ -113,11 +138,11 @@ Total: N | Passed: N | Failed: N | Skipped: N
 ## Results
 
 ### 1. Create username "agent-tester" — ✓ PASS
-[Description of what was done and what was observed]
+[Description of what was done and what was observed in the screenshot]
 See: 001-create-username.png
 
 ### N. Test title — ✗ FAIL
-[Description of what was done, what was observed, how it differed from expectation]
+[Description of what was done, what was observed in the screenshot, how it differed from expectation]
 See: NNN-title-slug.png
 
 ### N. Test title — ⊘ SKIP (blocked by: X, Y)
@@ -127,7 +152,7 @@ See: NNN-title-slug.png
 Each result entry MUST include:
 - Test id and title
 - Status symbol: ✓ PASS, ✗ FAIL, or ⊘ SKIP
-- Natural-language description of what the agent did and observed
+- Natural-language description of what the agent did and observed **in the screenshot**
 - Screenshot filename (for every executed test, not just failures)
 
 ### Phase 6: Summary
