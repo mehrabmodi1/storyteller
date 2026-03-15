@@ -85,8 +85,9 @@ For each test in order (or the single targeted test):
    - Use `browser_navigate` for page reloads
 
 3. **Timeouts**:
-   - Streaming operations (SSE story generation): wait up to **60 seconds**. Use `browser_wait_for` with `time: 35` then check status via `browser_snapshot`. If still streaming, wait another 25 seconds.
+   - Streaming operations (SSE story generation): wait up to **60 seconds**. **IMPORTANT: Do NOT use `browser_wait_for` with a `text` parameter for streaming — it has a 5-second default timeout that will expire before the stream finishes.** Instead, use `browser_wait_for` with `time: 40` (a pure time-based wait), then check status via `browser_snapshot`. If the snapshot still shows "Streaming", wait another 20 seconds with `time: 20` and re-check.
    - UI interactions (dropdowns, buttons, panels): wait up to **10 seconds**
+   - Dropdown loading (personas, corpuses, journeys): after page load, use `browser_wait_for` with `time: 3` before interacting with dropdowns
 
 4. **Judge**: Based on what you observe in snapshots, determine if the expected behavior occurred.
    - For `status: unimplemented` tests: a failure is expected. Still report what happened but mark as ✗ FAIL (expected).

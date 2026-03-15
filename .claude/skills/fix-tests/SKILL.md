@@ -118,8 +118,9 @@ Wait up to 15 seconds for both to become healthy. If either fails to start, abor
   - Use `browser_wait_for` when waiting for elements to appear
   - Use `browser_navigate` for page reloads
 - **Timeouts:**
-  - Streaming operations (SSE story generation): wait up to **60 seconds**. Use `browser_wait_for` with `time: 35` then check status via `browser_snapshot`. If still streaming, wait another 25 seconds.
+  - Streaming operations (SSE story generation): wait up to **60 seconds**. **IMPORTANT: Do NOT use `browser_wait_for` with a `text` parameter for streaming — it has a 5-second default timeout that will expire before the stream finishes.** Instead, use `browser_wait_for` with `time: 40` (a pure time-based wait), then check status via `browser_snapshot`. If still streaming, wait another 20 seconds with `time: 20` and re-check.
   - UI interactions (dropdowns, buttons, panels): wait up to **10 seconds**
+  - Dropdown loading (personas, corpuses, journeys): after page load, use `browser_wait_for` with `time: 3` before interacting with dropdowns
 - Judge pass/fail based on observed behavior
 
 **e) On failure (retry):**
