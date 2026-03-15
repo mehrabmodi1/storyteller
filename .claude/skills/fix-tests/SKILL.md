@@ -13,6 +13,16 @@ Tests are feature specs. A `status: unimplemented` test is a feature request —
 
 - `/fix-tests` — fix all failures from the latest full test report
 
+### Ralph Loop (continuous iteration)
+
+For fully autonomous iteration until all tests pass:
+
+```
+/ralph-loop "Run /fix-tests. Output <promise>ALL TESTS PASSING</promise> when the full suite run in Phase 3 shows zero failures." --max-iterations 5
+```
+
+Each ralph iteration starts fresh context but reads the latest test report from disk, so progress carries across iterations automatically. Use this when context gets crowded or fixes span multiple iteration cycles.
+
 ## Permissions
 
 This skill performs many automated actions. To avoid blocking on permission prompts:
