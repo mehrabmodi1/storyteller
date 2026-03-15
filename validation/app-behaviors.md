@@ -203,3 +203,17 @@ Attempt to start a journey with conditions that trigger a backend error
 appear in the UI with a "Dismiss" button. Note: the exact trigger
 mechanism may need to be determined during implementation — this test
 tracks error handling coverage.
+
+## 27. Switch corpus and verify story reflects new source material
+depends_on: 6
+
+The first story was generated using "The Mahabharata" corpus. Now switch
+to a different corpus: open the corpus dropdown and select "The Odyssey".
+Type a similar prompt (e.g. "Tell me the story of a brave warrior who
+questions the meaning of duty") in the new journey input and click
+"Start New Journey". Wait for the stream to complete (up to 60 seconds).
+Verify the story text references Greek mythology or Odyssey-related
+content (e.g. Odysseus, Ithaca, Penelope, Trojan War) rather than
+Mahabharata content (e.g. Yudhishthira, Arjuna, Kurukshetra). The
+reading panel should show "Complete" status and the graph should render
+new nodes.
