@@ -23,6 +23,7 @@ __pycache__/
 
 # testing
 /coverage
+/validation/
 
 # next.js
 /.next/

@@ -29,7 +29,7 @@ Claude Code session
 
 **Backend server**
 - FastAPI + uvicorn on port 8000
-- Uses the root `.venv` (Python 3.12)
+- Uses Poetry 2.x for dependency management (venv in Poetry's global cache)
 - `--reload` flag enables hot-reload on Python file changes
 - Health check: `GET http://localhost:8000/health`
 
@@ -42,7 +42,7 @@ Claude Code session
 
 ```bash
 # Backend
-cd storyteller_backend && ../.venv/bin/uvicorn api.main:app --reload --port 8000
+cd storyteller_backend && poetry run python -m api.main
 
 # Frontend
 cd storyteller_frontend && npm run dev

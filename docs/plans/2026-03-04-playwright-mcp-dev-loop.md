@@ -6,7 +6,7 @@
 
 **Architecture:** A `.mcp.json` at the repo root registers the Playwright MCP server project-wide. A `CLAUDE.md` at the repo root gives any agent the server startup commands and context needed to begin work without reading through the codebase.
 
-**Tech Stack:** `@playwright/mcp` (npx, no install needed), FastAPI/uvicorn (Python 3.12 `.venv`), Vite (npm)
+**Tech Stack:** `@playwright/mcp` (npx, no install needed), FastAPI/uvicorn (Python 3.12, Poetry 2.x), Vite (npm)
 
 ---
 
@@ -72,7 +72,7 @@ Always start both servers as background processes before interacting with the ap
 
 **Backend (port 8000):**
 ```bash
-cd storyteller_backend && ../.venv/bin/uvicorn api.main:app --reload --port 8000
+cd storyteller_backend && poetry run python -m api.main
 ```
 
 **Frontend (port 3000, HMR enabled):**
@@ -125,13 +125,15 @@ storyteller/
 
 ## Python Environment
 
-Root `.venv` uses Python 3.12. Always activate or reference it explicitly:
+Dependencies are managed with **Poetry 2.x**. The venv lives in Poetry's global cache.
+
 ```bash
-../.venv/bin/python      # from storyteller_backend/
-./.venv/bin/python       # from repo root
+poetry install          # install all deps (respects lockfile — safe)
+poetry add <package>    # add a new dep
+poetry run python       # run Python in the project env
 ```
 
-There is also a `storyteller_backend/.venv_bk` — ignore this, it is a backup.
+**NEVER run `pip install` to upgrade packages.** ChromaDB version changes trigger database migrations that permanently destroy embedded vector data in `data/chroma_db/`.
 ```
 
 **Step 2: Commit**
