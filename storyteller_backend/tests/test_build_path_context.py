@@ -72,5 +72,4 @@ class TestBuildPathContextMissingSummary:
         depth_2_graph.nodes["story_root"].pop("summary", None)
         state = make_state(depth_2_graph, choice_id="choice_a")
         result = build_path_context(state)
-        # Should not error, should produce empty or minimal output
-        assert isinstance(result["path_context"], str)
+        assert result["path_context"] == ""

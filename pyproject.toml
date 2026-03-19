@@ -33,7 +33,7 @@ black = "24.10.0"
 ruff = "0.8.4"
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["storyteller_backend/tests"]
 
 [build-system]
 requires = ["poetry-core"]
