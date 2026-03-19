@@ -1502,12 +1502,11 @@ cd storyteller_backend && poetry run pytest tests/test_build_path_context.py -v
 ```toml
 # Add to pyproject.toml under [tool.pytest.ini_options]:
 [tool.pytest.ini_options]
-asyncio_mode = "auto"
 testpaths = ["tests"]
 ```
 
 **Workflow node order matters:** `build_path_context` must come BEFORE `screen_prompt` in the workflow, since `screen_prompt` runs against the user's prompt (not the graph). The path context will be assembled but ignored on rejection — that's acceptable (it's cheap).
 
-**`asyncio.create_task` inside async nodes:** LangGraph supports async nodes natively. `asyncio.create_task` works within LangGraph's event loop. The pattern is identical to the existing image generation in `generate_story`.
+**Async nodes in LangGraph:** LangGraph supports async nodes natively — just use `async def` and register with `add_node` as usual. Use plain `await` for sequential async calls within a node. Only use `asyncio.create_task` when you genuinely need to overlap work with something else running concurrently (e.g., image generation in `generate_story` starts a task while the story is still streaming). For summary generation in `update_graph_with_story`, there is no concurrent work, so plain `await` is correct.
 
 **Frontend TypeScript:** If `paragraph_count` causes type errors in places where `story_length` was used, search for all remaining `story_length` references: `grep -r "story_length" storyteller_frontend/src/`.
