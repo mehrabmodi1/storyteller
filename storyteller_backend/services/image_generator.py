@@ -57,7 +57,8 @@ class ImageGenerator:
         """
         system_content = """Describe a single visual scene from the story text in one concise sentence or short paragraph.
 
-Focus only on: the key character(s), their setting, the dominant mood, and one central action or moment.
+You MUST include at least one main character from the passage — name them and briefly describe their appearance or posture as it appears in the text.
+Focus on: that character in their setting, the dominant mood, and one central action or moment.
 Do NOT include any style, artistic, or colour instructions — those are handled separately.
 Do NOT include any text, labels, or captions in your description."""
         

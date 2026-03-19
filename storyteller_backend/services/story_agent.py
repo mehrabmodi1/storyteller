@@ -374,23 +374,20 @@ async def generate_story(state: StorytellerState, config: RunnableConfig) -> Dic
     if path_context:
         journey_block = f"JOURNEY SO FAR:\n{path_context}\n\n"
 
-    persona_suffix = """
-        Grounding constraints (must follow):
-        - Use ONLY facts, events, characters, places, and causal relationships that appear in the SOURCE MATERIAL CHUNKS.
-        - Do NOT invent new characters, plot points, settings, timelines, or outcomes not supported by the chunks.
-        - If a detail is not explicitly in the chunks, either omit it or phrase it as uncertainty.
-        - Prioritize fidelity over creativity; the story should feel like an interpretation of the sources, not a new story."""
+    grounding_constraints = """
+GROUNDING CONSTRAINTS (non-negotiable — these override all other instructions):
+- Compose the story EXCLUSIVELY from the content in the SOURCE MATERIAL CHUNKS below.
+- Every character, event, place, timeline, and causal relationship must appear explicitly in the chunks.
+- Do NOT draw on any knowledge outside the chunks — not other parts of the corpus, not related traditions, not scholarly context, not general world knowledge.
+- If a detail is absent from the chunks, omit it entirely. Do not infer, extrapolate, or synthesise from outside sources.
+- The story should feel like a faithful re-telling of the chunks, not an expansion beyond them."""
+
+    persona_suffix = ""  # grounding constraints are now appended at the end of all prompts
 
     # Default system prompt if no persona is selected
     base_system_prompt = """You are a master storyteller. Your task is to weave a cohesive and engaging story from the provided source material, inspired by the user's prompt.
         Write EXACTLY {paragraph_count} paragraphs. Each paragraph should be substantial (150-200 words). Your response must be at least {word_target} words. Do not end the story early.
-        Do not just summarize the chunks; create a rich narrative, staying true to the events described in the source material.
-
-        Grounding constraints (must follow):
-        - Use ONLY facts, events, characters, places, and causal relationships that appear in the SOURCE MATERIAL CHUNKS.
-        - Do NOT invent new characters, plot points, settings, timelines, or outcomes not supported by the chunks.
-        - If a detail is not explicitly in the chunks, either omit it or phrase it as uncertainty.
-        - Prioritize fidelity over creativity; the story should feel like an interpretation of the sources, not a new story."""
+        Do not just summarize the chunks; create a rich narrative, staying true to the events described in the source material."""
 
     # Fetch persona prompt if a persona is selected
     if persona_name and persona_name in PERSONAS_DATA:
@@ -409,13 +406,7 @@ You must explicitly reference how the current chapter connects to the previous c
             # Add context for starting a new story
             system_prompt += """Use the provided source material to write a story inspired by the user's prompt.
 Write EXACTLY {paragraph_count} paragraphs. Each paragraph should be substantial (150-200 words). Your response must be at least {word_target} words. Do not end the story early.
-Do not just summarize the chunks; create a rich narrative, staying true to the events described in the source material.
-
-Grounding constraints (must follow):
-- Use ONLY facts, events, characters, places, and causal relationships that appear in the SOURCE MATERIAL CHUNKS.
-- Do NOT invent new characters, plot points, settings, timelines, or outcomes not supported by the chunks.
-- If a detail is not explicitly in the chunks, either omit it or phrase it as uncertainty.
-- Prioritize fidelity over creativity; the story should feel like an interpretation of the sources, not a new story."""
+Do not just summarize the chunks; create a rich narrative, staying true to the events described in the source material."""
     else:
         # No persona selected, use base prompt
         if last_story:
@@ -428,8 +419,8 @@ You must explicitly reference how the current chapter connects to the previous c
         else:
             system_prompt = base_system_prompt
 
-    # Add the source material context
-    system_prompt += "\n\nSOURCE MATERIAL CHUNKS:\n{chunks}"
+    # Grounding constraints come last so no persona instruction can override them
+    system_prompt += grounding_constraints + "\n\nSOURCE MATERIAL CHUNKS:\n{chunks}"
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", system_prompt),
@@ -559,6 +550,7 @@ def generate_choices(state: StorytellerState) -> Dict[str, Any]:
     """
     print(f"--- Node: generate_choices @ {datetime.now()} ---")
     persona_name = state.get('persona_name')
+    corpus_name = state.get('corpus_name', 'the source text')
 
     persona_block = ""
     if persona_name and persona_name in PERSONAS_DATA:
@@ -571,10 +563,20 @@ def generate_choices(state: StorytellerState) -> Dict[str, Any]:
         )
 
     system_content = (
-        "Based on the following story, generate three distinct and interesting follow-up prompts "
-        "that the user could choose to continue their exploration."
+        f"Based on the following story chunk — drawn from {corpus_name} — generate three follow-up prompts "
+        "that the user could choose to continue their journey through the narrative.\n\n"
+        f"Strict constraints:\n"
+        f"- Every choice must be rooted EXCLUSIVELY in {corpus_name}. "
+        "No other text, tradition, or source may be referenced or drawn upon, "
+        "even if it is mentioned in the story chunk.\n"
+        "- Every choice must be grounded in characters, events, places, or moments "
+        "that appear directly in the story chunk below.\n"
+        "- Do NOT introduce academic analysis, comparative scholarship, or synthesis "
+        "from any source outside this story chunk.\n"
+        "- Choices are invitations to explore the next part of this story, "
+        "not prompts to consult outside knowledge."
         + persona_block
-        + "\n\nSTORY:\n{story}"
+        + "\n\nSTORY CHUNK:\n{story}"
     )
     prompt = ChatPromptTemplate.from_messages([
         ("system", system_content),
@@ -586,9 +588,9 @@ def generate_choices(state: StorytellerState) -> Dict[str, Any]:
         model_name=settings.chat_model,
         api_key=ACTIVE_OPENAI_API_KEY,
     ).with_structured_output(Choices)
-    
+
     choice_generation_chain = prompt | choices_llm
-    
+
     story_for_choices = state['story']
     # Truncate the story if it's too long, to avoid context window errors.
     # The end of the story is most relevant for generating the next steps.
