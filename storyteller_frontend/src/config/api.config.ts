@@ -17,6 +17,9 @@ export const API_CONFIG = {
     corpuses: '/api/corpuses',
     corpus: (name: string) => `/api/corpuses/${encodeURIComponent(name)}`,
     
+    // Users
+    listUsers: '/api/list_users',
+
     // Journeys
     listGraphs: '/api/list_graphs',
     loadGraph: '/api/load_graph',

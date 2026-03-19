@@ -4,10 +4,11 @@
  * Supports adding new usernames via input
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BaseDropdown } from './BaseDropdown';
 import { useApp } from '@/context/AppContext';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { listUsers } from '@/services/api';
 
 interface UsernameItem {
   value: string;
@@ -19,7 +20,19 @@ export function UsernameDropdown() {
   const [savedUsernames, setSavedUsernames] = useLocalStorage<string[]>('storyteller_usernames', []);
   const [showInput, setShowInput] = useState(false);
   const [newUsername, setNewUsername] = useState('');
-  
+
+  // Fetch known users from backend on mount and merge with localStorage
+  useEffect(() => {
+    listUsers().then((backendUsers) => {
+      setSavedUsernames((prev) => {
+        const merged = new Set([...prev, ...backendUsers]);
+        return [...merged].sort();
+      });
+    }).catch(() => {
+      // Backend may be unavailable — silently fall back to localStorage only
+    });
+  }, []);
+
   // Build items list with existing usernames + "Add New" option
   const items: UsernameItem[] = [
     ...savedUsernames.map((u) => ({ value: u, isNew: false })),
