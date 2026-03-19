@@ -57,7 +57,7 @@ class Config:
     embedding_model: str = "text-embedding-3-small"
     chat_model: str = "gpt-4o-mini"
     image_model: str = "dall-e-2"
-    image_generation_size: str = "1024x1024"
+    image_generation_size: str = "256x256"
     image_generation_quality: str = "standard"
     
     # Data Paths (relative to storyteller_backend/)

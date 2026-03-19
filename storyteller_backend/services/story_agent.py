@@ -550,19 +550,34 @@ async def update_graph_with_story(state: StorytellerState) -> Dict[str, Any]:
 def generate_choices(state: StorytellerState) -> Dict[str, Any]:
     """
     Generates three follow-up choices based on the new story.
-    
+
     Args:
         state: Current storyteller state
-    
+
     Returns:
         Dict with choices
     """
     print(f"--- Node: generate_choices @ {datetime.now()} ---")
+    persona_name = state.get('persona_name')
+
+    persona_block = ""
+    if persona_name and persona_name in PERSONAS_DATA:
+        persona_system_prompt = PERSONAS_DATA[persona_name]['system_prompt']
+        persona_block = (
+            f"\n\nYou are narrating as the following persona:\n{persona_system_prompt}\n\n"
+            "Phrase each follow-up choice in this persona's voice and tone — as if this persona is "
+            "beckoning the listener toward the next part of the story. The choices must sound natural "
+            "coming from this persona, not like generic menu items such as 'Explore X' or 'Learn about Y'."
+        )
+
+    system_content = (
+        "Based on the following story, generate three distinct and interesting follow-up prompts "
+        "that the user could choose to continue their exploration."
+        + persona_block
+        + "\n\nSTORY:\n{story}"
+    )
     prompt = ChatPromptTemplate.from_messages([
-        ("system", 
-         "You are an expert in narrative branching. Based on the following story, generate three distinct and interesting follow-up prompts that the user could choose to continue their exploration. "
-         "Phrase them as commands or questions. For example: 'Tell me more about Arjuna's exile.' or 'What happened next at the dice game?'"
-         "STORY:\n{story}"),
+        ("system", system_content),
         ("user", "Please generate three follow-up choices.")
     ])
 

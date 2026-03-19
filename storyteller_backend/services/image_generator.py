@@ -15,6 +15,12 @@ from config.settings import settings
 from services.auth_service import get_async_openai_client
 
 
+STYLE_PREFIX = (
+    "impressionist watercolour sketch, soft pastel colour palette, "
+    "loose gestural brushstrokes, minimal detail, no text, warm dreamlike atmosphere — "
+)
+
+
 class ImageGenerator:
     """
     Generates images for story chapters using an image gen model.
@@ -49,16 +55,11 @@ class ImageGenerator:
         Returns:
             Generated image prompt, or None if generation fails
         """
-        system_content = """You are an expert at creating image prompts for DALL-E 3. Your goal is to translate story text into a prompt that generates a warm, coloured sketch.
+        system_content = """Describe a single visual scene from the story text in one concise sentence or short paragraph.
 
-Key stylistic requirements:
-- **Artistic Style:** A coloured sketch, with minimal detail, and very rough strokes in the style of Impressionist painters like Monet, Van Gogh, and Degas. These should be sketches of characters and events.
-- **Detail Level:** Minimal details on elements in the scene. There should be absolutely no text in the image.
-- **Colour Palette:** The colours should reflect the mood of the provided story text.
-- **Feeling:** The overall image should feel warm and evocative, not gritty or photorealistic.
-
-Based on the story text, create a single, concise paragraph that describes a visually compelling scene, adhering to all the stylistic requirements above. Include the key stylistic requirements verbatim in your prompt.
-Focus on key characters, the setting, the mood, and the action."""
+Focus only on: the key character(s), their setting, the dominant mood, and one central action or moment.
+Do NOT include any style, artistic, or colour instructions — those are handled separately.
+Do NOT include any text, labels, or captions in your description."""
         
         if parent_image_prompt:
             system_content += f"\n\nMaintain visual continuity with the previous image, which was described as: '{parent_image_prompt}'. Ensure characters and locations look consistent, while adhering to the specified artistic style."
@@ -96,7 +97,7 @@ Focus on key characters, the setting, the mood, and the action."""
         try:
             response = await self.client.images.generate(
                 model=settings.image_model,
-                prompt=image_prompt,
+                prompt=STYLE_PREFIX + image_prompt,
                 n=1,
                 size=settings.image_generation_size,
             )
