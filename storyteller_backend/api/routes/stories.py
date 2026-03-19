@@ -112,8 +112,8 @@ async def story_generation_events(
             "story": "",
             "choices": [],
             "paragraph_count": paragraph_count,
-            "path_context": "",          # populated by build_path_context node (Task 7)
-            "guardrail_rejected": False, # set by screen_prompt node (Task 7)
+            "path_context": "",
+            "guardrail_rejected": False,
             "last_story": None,
             "serializable_graph": None,
             "persona_name": persona_name,
@@ -135,18 +135,28 @@ async def story_generation_events(
             event_type = event['event']
             event_name = event.get('name')
             
+            # Detect guardrail rejection — emitted before any generation begins
+            if event_type == "on_chain_end" and event_name == 'screen_prompt':
+                node_output = event['data'].get('output', {})
+                if node_output.get('guardrail_rejected'):
+                    yield {
+                        "event": "guardrail_reject",
+                        "data": "The storyteller prefers a different path — would you like to rethink your prompt?"
+                    }
+                    return
+
             # Track when we're in story generation phase
             if event_type == 'on_chain_start' and event_name == 'generate_story':
                 is_generating_story = True
             elif event_type == 'on_chain_end' and event_name == 'generate_story':
                 is_generating_story = False
-            
+
             # Stream story tokens as they're generated
             if is_generating_story and event_type == "on_chat_model_stream":
                 token = event['data']['chunk'].content
                 if token:
                     yield {"event": "story_chunk", "data": token}
-            
+
             # At the end, get the final state and updated graph
             elif event_type == "on_chain_end" and event_name == 'update_graph_with_choices':
                 node_output = event['data'].get('output')
