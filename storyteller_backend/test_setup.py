@@ -169,11 +169,11 @@ def test_models():
         # Test StoryRequest validation
         request = StoryRequest(
             prompt="Tell me a story",
-            story_length=1500,
+            paragraph_count=4,
             corpus_name="mahabharata"
         )
         assert request.prompt == "Tell me a story", "StoryRequest validation failed"
-        assert request.story_length == 1500, "Story length validation failed"
+        assert request.paragraph_count == 4, "Paragraph count validation failed"
         
         # Test CorpusInfo creation
         corpus = CorpusInfo(
