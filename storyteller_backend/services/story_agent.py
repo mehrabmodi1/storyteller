@@ -243,6 +243,11 @@ async def generate_story(state: StorytellerState, config: RunnableConfig) -> Dic
     parent_image_prompt = state.get('parent_image_prompt')
     persona_name = state.get('persona_name')
 
+    path_context = state.get('path_context', '')
+    journey_block = ""
+    if path_context:
+        journey_block = f"JOURNEY SO FAR:\n{path_context}\n\n"
+
     persona_suffix = """
         Grounding constraints (must follow):
         - Use ONLY facts, events, characters, places, and causal relationships that appear in the SOURCE MATERIAL CHUNKS.
@@ -268,11 +273,11 @@ async def generate_story(state: StorytellerState, config: RunnableConfig) -> Dic
         system_prompt = f"{persona_prompt}\n\n"
         if last_story:
              # Add context about continuing the story
-            system_prompt += """You are continuing a narrative. The user has chosen a path, and you must now weave the next part of the story, building upon the provided previous chapter.
+            system_prompt += f"""{journey_block}You are continuing a narrative. The user has chosen a path, and you must now weave the next part of the story, building upon the provided previous chapter.
 PREVIOUS CHAPTER:
-{last_story}
+{{last_story}}
 
-Your task is to use the following text chunks as source material to write the next chapter of approximately {paragraph_count} paragraphs (roughly {word_target} words).
+Your task is to use the following text chunks as source material to write the next chapter of approximately {{paragraph_count}} paragraphs (roughly {{word_target}} words).
 You must explicitly reference how the current chapter connects to the previous chapter. Transition gracefully from the previous chapter to the current one. The story should be inspired by the user's prompt."""
         else:
             # Add context for starting a new story
@@ -288,11 +293,11 @@ Grounding constraints (must follow):
     else:
         # No persona selected, use base prompt
         if last_story:
-            system_prompt = """You are continuing a narrative. The user has chosen a path, and you must now weave the next part of the story, building upon the provided previous chapter.
+            system_prompt = f"""{journey_block}You are continuing a narrative. The user has chosen a path, and you must now weave the next part of the story, building upon the provided previous chapter.
 PREVIOUS CHAPTER:
-{last_story}
+{{last_story}}
 
-Your task is to use the following text chunks as source material to write the next chapter of approximately {paragraph_count} paragraphs (roughly {word_target} words).
+Your task is to use the following text chunks as source material to write the next chapter of approximately {{paragraph_count}} paragraphs (roughly {{word_target}} words).
 You must explicitly reference how the current chapter connects to the previous chapter. Transition gracefully from the previous chapter to the current one. The story should be inspired by the user's prompt."""
         else:
             system_prompt = base_system_prompt
