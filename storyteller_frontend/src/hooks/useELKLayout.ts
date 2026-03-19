@@ -54,12 +54,11 @@ export function useELKLayout(graph: TransformedGraph | null) {
         });
 
         const isInitialLayout = !initialLayoutDoneRef.current;
-        const transitionStyle = isInitialLayout ? {} : { transition: 'transform 0.4s ease' };
 
         const layoutedNodes = layoutTarget.nodes.map((node) => ({
           ...node,
           position: childPositions.get(node.id) ?? { x: 0, y: 0 },
-          style: { ...node.style, ...transitionStyle },
+          style: isInitialLayout ? node.style : { ...node.style, transition: 'transform 0.4s ease' },
         }));
 
         initialLayoutDoneRef.current = true;
