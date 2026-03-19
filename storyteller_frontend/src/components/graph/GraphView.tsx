@@ -54,13 +54,13 @@ interface GraphCanvasProps {
   activeChoiceId?: string | null;
   editablePrompt?: string;
   onChangePrompt?: (value: string) => void;
-  onSubmitPrompt?: () => void;
+  onSubmitPrompt?: (text?: string) => void;
   onCancelEdit?: () => void;
 }
 
 function GraphCanvasInner({
   graph,
-  onSelectChoice,
+  onSelectChoice: _onSelectChoice,
   onSelectStoryNode,
   onCancelEdit,
 }: GraphCanvasProps) {
@@ -147,6 +147,7 @@ function GraphCanvasInner({
         proOptions={{ hideAttribution: true }}
         minZoom={0.1}
         maxZoom={1.8}
+        onlyRenderVisibleElements={false}
       >
         <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#374151" />
         <MiniMap
@@ -193,7 +194,7 @@ export function GraphView(props: GraphCanvasProps) {
         },
       } as StoryReactFlowNode;
     });
-  }, [graph?.nodes, activeChoiceId, editablePrompt, onChangePrompt, onSubmitPrompt, onCancelEdit, onSelectChoice]);
+  }, [graph?.nodes, activeChoiceId, onChangePrompt, onSubmitPrompt, onCancelEdit, onSelectChoice]);
 
   return (
     <ReactFlowProvider>

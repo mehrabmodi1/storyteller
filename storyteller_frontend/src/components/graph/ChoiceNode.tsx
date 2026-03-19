@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Handle, Position, type NodeProps } from 'reactflow';
 import type { ReactFlowNodeData } from '@/types/graph.types';
 import { DEFAULT_THEME } from '@/context/AppContext';
@@ -9,7 +9,7 @@ type ChoiceNodeData = ReactFlowNodeData & {
     isActive?: boolean;
     editablePrompt?: string;
     onChangePrompt?: (value: string) => void;
-    onSubmitPrompt?: () => void;
+    onSubmitPrompt?: (text?: string) => void;
     onCancel?: () => void;
     onSelectChoice?: (nodeId: string) => void;
   };
@@ -26,7 +26,7 @@ export const ChoiceNode: React.FC<NodeProps<ChoiceNodeData>> = ({ id, data, sele
   const {
     isActive = false,
     editablePrompt,
-    onChangePrompt,
+    onChangePrompt: _onChangePrompt,
     onSubmitPrompt,
     onCancel,
     onSelectChoice,
@@ -37,10 +37,43 @@ export const ChoiceNode: React.FC<NodeProps<ChoiceNodeData>> = ({ id, data, sele
   const accent = theme.button ?? 'bg-sky-600';
   const ringClass = getRingClass(theme.ring);
 
+  // Local state for textarea to avoid re-render cascade from parent useMemo
+  const [localPrompt, setLocalPrompt] = useState(editablePrompt ?? data.label);
+  const localPromptRef = useRef(localPrompt);
+  localPromptRef.current = localPrompt;
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Re-initialize local state when the node becomes active
+  useEffect(() => {
+    if (isActive) {
+      setLocalPrompt(editablePrompt ?? data.label);
+    }
+  }, [isActive]);
+
+  // Move cursor to end of textarea when it becomes active
+  useEffect(() => {
+    if (isActive && textareaRef.current) {
+      const len = textareaRef.current.value.length;
+      textareaRef.current.setSelectionRange(len, len);
+    }
+  }, [isActive]);
+
+  const handleLocalChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setLocalPrompt(e.target.value);
+  }, []);
+
+  const handleLocalSubmit = useCallback(() => {
+    // Pass the current local text directly to submit, bypassing stale parent state
+    onSubmitPrompt?.(localPromptRef.current);
+  }, [onSubmitPrompt]);
+
   const handleKeyDown: React.KeyboardEventHandler<HTMLTextAreaElement> = (e) => {
+    // Stop all keystrokes from bubbling to the parent <button>, which would
+    // otherwise treat Space/Enter as a button click and re-trigger onSelectChoice.
+    e.stopPropagation();
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      onSubmitPrompt?.();
+      handleLocalSubmit();
     }
   };
 
@@ -72,10 +105,11 @@ export const ChoiceNode: React.FC<NodeProps<ChoiceNodeData>> = ({ id, data, sele
           <>
             <div className="flex-1">
               <textarea
+                ref={textareaRef}
                 id={`choice-prompt-${id}`}
                 name={`choice-prompt-${id}`}
-                value={editablePrompt ?? data.label}
-                onChange={(e) => onChangePrompt?.(e.target.value)}
+                value={localPrompt}
+                onChange={handleLocalChange}
                 onKeyDown={handleKeyDown}
                 className="w-full rounded-xl bg-white/10 border border-white/20 px-3 py-2 text-sm text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-white/40 resize-none"
                 rows={4}
@@ -93,7 +127,7 @@ export const ChoiceNode: React.FC<NodeProps<ChoiceNodeData>> = ({ id, data, sele
               </button>
               <button
                 type="button"
-                onClick={(e) => { e.stopPropagation(); onSubmitPrompt?.(); }}
+                onClick={(e) => { e.stopPropagation(); handleLocalSubmit(); }}
                 className="text-sm px-3 py-2 rounded-lg font-semibold bg-white text-gray-900 hover:bg-gray-200"
               >
                 Continue Journey
