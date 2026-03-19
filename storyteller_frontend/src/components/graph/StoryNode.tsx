@@ -21,6 +21,38 @@ export const StoryNode: React.FC<NodeProps<ReactFlowNodeData>> = ({ data, select
   const imageSrc = data.image_url ?? undefined;
   const showImage = !!imageSrc && !imageFailed;
 
+  if (data.isPlaceholder) {
+    return (
+      <div className="relative">
+        <Handle type="target" position={Position.Top} className="!bg-white/60" />
+        <div
+          className={`rounded-2xl border ${
+            selected ? `ring-2 ${ringClass} shadow-lg shadow-amber-500/30 border-transparent` : 'border-slate-600 border-dashed'
+          } ${background} text-white p-4 flex flex-col gap-3 transition-all`}
+          style={{
+            width: GRAPH_VISUAL_CONFIG.storyNode.width,
+            height: GRAPH_VISUAL_CONFIG.storyNode.height,
+          }}
+        >
+          <div className="flex items-center justify-between text-xs uppercase tracking-wide text-white/80">
+            <span>Story Chapter</span>
+            {data.persona ? (
+              <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${accent} text-white`}>
+                {data.persona}
+              </span>
+            ) : null}
+          </div>
+          <div className="text-lg font-semibold line-clamp-1">{data.label}</div>
+          <div className="flex-1 flex flex-col items-center justify-center gap-3">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-400" />
+            <span className="text-xs text-white/50 italic">Generating story…</span>
+          </div>
+        </div>
+        <Handle type="source" position={Position.Bottom} className="!bg-white/60" />
+      </div>
+    );
+  }
+
   return (
     <div className="relative">
       <Handle type="target" position={Position.Top} className="!bg-white/60" />

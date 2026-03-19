@@ -300,7 +300,7 @@ Note: implementation requires a backend endpoint (e.g. `GET /api/journeys/users`
 that scans `saved_graphs/` directories, and frontend changes to fetch and
 merge those usernames into the dropdown on load.
 
-## 32. Placeholder node appears immediately when generation starts
+## 31. Placeholder node appears immediately when generation starts
 depends_on: 13
 status: unimplemented
 
@@ -343,7 +343,7 @@ before any story content arrives. The placeholder should be clickable
 and reopen the reading panel. Once the stream completes, the placeholder
 updates in-place with the real content and its choice nodes.
 
-## 31. Verify story nodes display generated images
+## 32. Verify story nodes display generated images
 depends_on: 7
 status: unimplemented
 

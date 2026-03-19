@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AppProvider, useApp, DEFAULT_THEME } from '@/context/AppContext';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { PersonaDropdown } from '@/components/dropdowns/PersonaDropdown';
@@ -30,6 +30,7 @@ function AppContent() {
   const [viewingStoryText, setViewingStoryText] = useState<string | null>(null);
   const [currentGraphId, setCurrentGraphId] = useState<string | null>(null);
   const [paragraphCount, setParagraphCount] = useState(4);
+  const pendingPlaceholderIdRef = useRef<string | null>(null);
   const { graphData: streamingGraph, isStreaming, error: streamError, closeStream, streamingText, guardrailMessage } = useSSE(streamUrl);
 
   const journeyPersonaTheme = useMemo<ColorTheme>(() => {
@@ -80,6 +81,13 @@ function AppContent() {
       corpus_name: isTestError ? '__test_error__' : corpus,
       paragraph_count: paragraphCount,
     });
+    // Optimistically add a placeholder story node so the graph isn't blank during streaming
+    const placeholderId = `placeholder-story-${Date.now()}`;
+    pendingPlaceholderIdRef.current = placeholderId;
+    setRawGraph({
+      nodes: [{ id: placeholderId, type: 'story', label: trimmedPrompt, isPlaceholder: true }],
+      links: [],
+    });
     setStreamUrl(sseUrl);
   };
 
@@ -92,6 +100,7 @@ function AppContent() {
 
   useEffect(() => {
     if (streamingGraph) {
+      pendingPlaceholderIdRef.current = null;
       setRawGraph(streamingGraph);
       setPromptInput('');
       setActiveChoiceId(null);
@@ -110,6 +119,20 @@ function AppContent() {
     if (streamError) {
       setJourneyError(streamError.message);
       setStreamUrl(null);
+      // Remove the placeholder node so a failed stream doesn't leave a stale spinner
+      const placeholderId = pendingPlaceholderIdRef.current;
+      if (placeholderId) {
+        pendingPlaceholderIdRef.current = null;
+        setRawGraph((prev) =>
+          prev
+            ? {
+                ...prev,
+                nodes: prev.nodes.filter((n) => n.id !== placeholderId),
+                links: prev.links.filter((l) => l.target !== placeholderId),
+              }
+            : prev,
+        );
+      }
     }
   }, [streamError]);
 
@@ -125,6 +148,12 @@ function AppContent() {
   };
 
   const handleSelectStoryNode = (nodeId: string) => {
+    if (nodeId === pendingPlaceholderIdRef.current) {
+      // Clicking the placeholder reopens the reading panel to show streaming/completed text
+      setViewingStoryText(null);
+      setShowReadingPanel(true);
+      return;
+    }
     const storyNode = rawGraph?.nodes.find((n) => n.id === nodeId);
     if (storyNode) {
       setCurrentStoryTitle(storyNode.label);
@@ -139,9 +168,24 @@ function AppContent() {
     if (!trimmed) return;
 
     setCurrentStoryTitle(trimmed);
+
+    // Optimistically insert a placeholder story node connected to the selected choice
+    const placeholderId = `placeholder-story-${Date.now()}`;
+    const choiceId = activeChoiceId;
+    pendingPlaceholderIdRef.current = placeholderId;
+    setRawGraph((prev) =>
+      prev
+        ? {
+            ...prev,
+            nodes: [...prev.nodes, { id: placeholderId, type: 'story' as const, label: trimmed, isPlaceholder: true }],
+            links: [...prev.links, { source: choiceId, target: placeholderId }],
+          }
+        : prev,
+    );
+
     const sseUrl = buildStreamStoryURL({
       prompt: trimmed,
-      choice_id: activeChoiceId,
+      choice_id: choiceId,
       new_journey: false,
       persona_name: journeyPersona ?? persona,
       username,

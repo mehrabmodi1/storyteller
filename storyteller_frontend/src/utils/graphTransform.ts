@@ -74,6 +74,7 @@ function transformNode(
       timestamp: node.timestamp,
       persona: node.persona ?? options.personaName ?? null,
       theme: resolveTheme(node, options),
+      isPlaceholder: node.isPlaceholder ?? false,
     },
   };
 }

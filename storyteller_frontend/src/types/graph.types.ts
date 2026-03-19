@@ -18,6 +18,7 @@ export interface GraphNode {
   timestamp?: string;
   persona?: string | null;
   theme?: ColorTheme;
+  isPlaceholder?: boolean;
 }
 
 /**
@@ -56,6 +57,7 @@ export interface ReactFlowNodeData {
   timestamp?: string;
   persona?: string | null;
   theme?: ColorTheme;
+  isPlaceholder?: boolean;
 }
 
 export type StoryReactFlowNode = Node<ReactFlowNodeData>;
