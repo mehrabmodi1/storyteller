@@ -182,11 +182,16 @@ async def _generate_node_summary(story: str, prompt: str, api_key: str) -> str:
 async def _check_moderation(prompt: str, api_key: str) -> bool:
     """
     Returns True if the prompt passes OpenAI moderation (not flagged).
-    Returns False if any category is flagged.
+    Returns False if flagged or if the moderation API is unavailable.
+    Fails closed: uncertain prompts are rejected.
     """
-    client = AsyncOpenAI(api_key=api_key)
-    result = await client.moderations.create(input=prompt)
-    return not result.results[0].flagged
+    try:
+        client = AsyncOpenAI(api_key=api_key)
+        result = await client.moderations.create(input=prompt)
+        return not result.results[0].flagged
+    except Exception as e:
+        print(f"[moderation] API error: {e}. Failing closed (reject).")
+        return False
 
 
 _CLASSIFIER_SYSTEM_PROMPT = """You are a content guardian for an interactive storytelling app based on \
@@ -213,21 +218,26 @@ Return verdict "fail" if the prompt is malicious intent."""
 
 async def _classify_intent(prompt: str, corpus_name: str, api_key: str) -> PromptScreenResult:
     """
-    Uses gpt-4o-mini to classify whether the prompt is a faithful exploration
-    of the source material (pass) or a malicious intent (fail).
+    Uses the configured guardrail model to classify whether the prompt is a faithful
+    exploration of the source material (pass) or malicious intent (fail).
+    Fails closed: returns fail verdict on any error.
     """
-    classifier_llm = ChatOpenAI(
-        temperature=0,
-        model_name=settings.guardrail_model,
-        api_key=api_key,
-    ).with_structured_output(PromptScreenResult)
+    try:
+        classifier_llm = ChatOpenAI(
+            temperature=0,
+            model_name=settings.guardrail_model,
+            api_key=api_key,
+        ).with_structured_output(PromptScreenResult)
 
-    system = _CLASSIFIER_SYSTEM_PROMPT.format(corpus_name=corpus_name)
-    messages = [
-        {"role": "system", "content": system},
-        {"role": "user", "content": prompt},
-    ]
-    return await classifier_llm.ainvoke(messages)
+        system = _CLASSIFIER_SYSTEM_PROMPT.format(corpus_name=corpus_name)
+        messages = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": prompt},
+        ]
+        return await classifier_llm.ainvoke(messages)
+    except Exception as e:
+        print(f"[classifier] Error: {e}. Failing closed (reject).")
+        return PromptScreenResult(verdict="fail", reason=f"Classifier error: {str(e)[:100]}")
 
 
 async def screen_prompt(state: StorytellerState) -> Dict[str, Any]:
@@ -240,7 +250,7 @@ async def screen_prompt(state: StorytellerState) -> Dict[str, Any]:
     """
     print(f"--- Node: screen_prompt @ {datetime.now()} ---")
     prompt = state['messages'][-1].content
-    corpus_name = state.get('corpus_name', 'mahabharata')
+    corpus_name = state.get('corpus_name') or 'mahabharata'
     api_key = ACTIVE_OPENAI_API_KEY
 
     moderation_ok, classifier_result = await asyncio.gather(
