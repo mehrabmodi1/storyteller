@@ -643,8 +643,9 @@ def create_story_agent(api_key: Optional[str] = None):
     workflow = StateGraph(StorytellerState)
 
     # Add nodes to the graph
-    # TODO(Task 7): wire build_path_context and screen_prompt into workflow
     workflow.add_node("get_last_story", get_last_story)
+    workflow.add_node("build_path_context", build_path_context)
+    workflow.add_node("screen_prompt", screen_prompt)
     workflow.add_node("generate_search_query", generate_search_query)
     workflow.add_node("retrieve_chunks", retrieve_chunks)
     workflow.add_node("generate_story", generate_story)
@@ -654,7 +655,19 @@ def create_story_agent(api_key: Optional[str] = None):
 
     # Define the edges that connect the nodes
     workflow.set_entry_point("get_last_story")
-    workflow.add_edge("get_last_story", "generate_search_query")
+    workflow.add_edge("get_last_story", "build_path_context")
+    workflow.add_edge("build_path_context", "screen_prompt")
+
+    # Conditional edge from screen_prompt: pass → generate_search_query, fail → END
+    workflow.add_conditional_edges(
+        "screen_prompt",
+        lambda state: "reject" if state.get("guardrail_rejected") else "continue",
+        {
+            "continue": "generate_search_query",
+            "reject": END,
+        }
+    )
+
     workflow.add_edge("generate_search_query", "retrieve_chunks")
     workflow.add_edge("retrieve_chunks", "generate_story")
     workflow.add_edge("generate_story", "update_graph_with_story")
