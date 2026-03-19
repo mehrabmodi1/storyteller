@@ -5,6 +5,7 @@ import { PersonaDropdown } from '@/components/dropdowns/PersonaDropdown';
 import { CorpusDropdown } from '@/components/dropdowns/CorpusDropdown';
 import { UsernameDropdown } from '@/components/dropdowns/UsernameDropdown';
 import { JourneyDropdown } from '@/components/dropdowns/JourneyDropdown';
+import { ParagraphCountSlider } from '@/components/ParagraphCountSlider';
 import { GraphDebugPanel } from '@/components/debug';
 import { GraphView } from '@/components/graph/GraphView';
 import { ReadingPanel } from '@/components/ReadingPanel';
@@ -28,6 +29,7 @@ function AppContent() {
   const [journeyError, setJourneyError] = useState<string | null>(null);
   const [viewingStoryText, setViewingStoryText] = useState<string | null>(null);
   const [currentGraphId, setCurrentGraphId] = useState<string | null>(null);
+  const [paragraphCount, setParagraphCount] = useState(4);
   const { graphData: streamingGraph, isStreaming, error: streamError, closeStream, streamingText, guardrailMessage } = useSSE(streamUrl);
 
   const journeyPersonaTheme = useMemo<ColorTheme>(() => {
@@ -76,6 +78,7 @@ function AppContent() {
       persona_name: persona,
       username,
       corpus_name: isTestError ? '__test_error__' : corpus,
+      paragraph_count: paragraphCount,
     });
     setStreamUrl(sseUrl);
   };
@@ -144,6 +147,7 @@ function AppContent() {
       username,
       corpus_name: corpus,
       graph_id: currentGraphId ?? undefined,
+      paragraph_count: paragraphCount,
     });
     setStreamUrl(sseUrl);
     setShowReadingPanel(true);
@@ -168,7 +172,7 @@ function AppContent() {
         <div className="space-y-4">
           <h1 className="text-3xl font-semibold text-white">Story Controls</h1>
           <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               <div>
                 <p className="text-sm text-white/70 mb-1">Username</p>
                 <UsernameDropdown />
@@ -190,6 +194,14 @@ function AppContent() {
                 <JourneyDropdown
                   onJourneyLoad={handleJourneyLoad}
                   onGraphLoaded={setRawGraph}
+                />
+              </div>
+              <div>
+                <p className="text-sm text-white/70 mb-1">Story Length</p>
+                <ParagraphCountSlider
+                  value={paragraphCount}
+                  onChange={setParagraphCount}
+                  disabled={isStreaming}
                 />
               </div>
             </div>

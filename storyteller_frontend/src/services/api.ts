@@ -58,13 +58,26 @@ export function buildStreamStoryURL(params: {
   prompt: string;
   choice_id?: string;
   new_journey?: boolean;
-  story_length?: number;
+  paragraph_count?: number;
   persona_name?: string;
   randomize_retrieval?: boolean;
   username?: string;
   corpus_name?: string;
+  graph_id?: string;
 }): string {
   return buildURL(API_CONFIG.endpoints.streamStory, params as Record<string, string | number | boolean>);
+}
+
+// =============================================================================
+// USERS API
+// =============================================================================
+
+/**
+ * GET /api/list_users - List all known usernames from the backend
+ */
+export async function listUsers(): Promise<string[]> {
+  const data = await apiFetch<{ users: string[] }>(API_CONFIG.endpoints.listUsers);
+  return data.users;
 }
 
 // =============================================================================
