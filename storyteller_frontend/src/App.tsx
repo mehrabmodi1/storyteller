@@ -27,7 +27,8 @@ function AppContent() {
   const [activeChoicePrompt, setActiveChoicePrompt] = useState<string>('');
   const [journeyError, setJourneyError] = useState<string | null>(null);
   const [viewingStoryText, setViewingStoryText] = useState<string | null>(null);
-  const { graphData: streamingGraph, isStreaming, error: streamError, closeStream, streamingText } = useSSE(streamUrl);
+  const [currentGraphId, setCurrentGraphId] = useState<string | null>(null);
+  const { graphData: streamingGraph, isStreaming, error: streamError, closeStream, streamingText, guardrailMessage } = useSSE(streamUrl);
 
   const journeyPersonaTheme = useMemo<ColorTheme>(() => {
     if (!journeyPersona) {
@@ -53,6 +54,7 @@ function AppContent() {
   const handleJourneyLoad = (journey: JourneyMeta) => {
     setJourneyPersona(journey.persona);
     setCorpus(journey.corpus_name);
+    setCurrentGraphId(journey.graph_id);
   };
 
   const handleStartNewJourney = () => {
@@ -65,12 +67,15 @@ function AppContent() {
     setCurrentStoryTitle(trimmedPrompt);
     setActiveChoiceId(null);
     setActiveChoicePrompt('');
+    setCurrentGraphId(null);
+    // Test hook: prompt starting with "!error" triggers a simulated stream error
+    const isTestError = trimmedPrompt.startsWith('!error');
     const sseUrl = buildStreamStoryURL({
-      prompt: trimmedPrompt,
+      prompt: isTestError ? trimmedPrompt.slice(6).trim() || 'test' : trimmedPrompt,
       new_journey: true,
       persona_name: persona,
       username,
-      corpus_name: corpus,
+      corpus_name: isTestError ? '__test_error__' : corpus,
     });
     setStreamUrl(sseUrl);
   };
@@ -90,6 +95,11 @@ function AppContent() {
       setActiveChoicePrompt('');
       setStreamUrl(null);
       setJourneyError(null);
+      // Extract graph_id from the SSE response metadata
+      const graphName = streamingGraph.graph?.graph_name;
+      if (graphName) {
+        setCurrentGraphId(graphName);
+      }
     }
   }, [streamingGraph]);
 
@@ -120,9 +130,9 @@ function AppContent() {
     }
   };
 
-  const handleSubmitContinuation = () => {
+  const handleSubmitContinuation = (textOverride?: string) => {
     if (!activeChoiceId) return;
-    const trimmed = activeChoicePrompt.trim();
+    const trimmed = (textOverride ?? activeChoicePrompt).trim();
     if (!trimmed) return;
 
     setCurrentStoryTitle(trimmed);
@@ -133,6 +143,7 @@ function AppContent() {
       persona_name: journeyPersona ?? persona,
       username,
       corpus_name: corpus,
+      graph_id: currentGraphId ?? undefined,
     });
     setStreamUrl(sseUrl);
     setShowReadingPanel(true);
@@ -219,6 +230,11 @@ function AppContent() {
                 >
                   Dismiss
                 </button>
+              </p>
+            ) : null}
+            {guardrailMessage ? (
+              <p className="text-sm text-amber-400">
+                {guardrailMessage}
               </p>
             ) : null}
           </div>

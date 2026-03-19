@@ -11,6 +11,7 @@ export interface UseSSEResult {
   graphData: GraphData | null;
   isStreaming: boolean;
   error: Error | null;
+  guardrailMessage: string | null;
   closeStream: () => void;
 }
 
@@ -25,6 +26,7 @@ export function useSSE(url: string | null): UseSSEResult {
   const [graphData, setGraphData] = useState<GraphData | null>(null);
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
   const [error, setError] = useState<Error | null>(null);
+  const [guardrailMessage, setGuardrailMessage] = useState<string | null>(null);
   
   const eventSourceRef = useRef<EventSource | null>(null);
   
@@ -47,6 +49,7 @@ export function useSSE(url: string | null): UseSSEResult {
     setStreamingText('');
     setGraphData(null);
     setError(null);
+    setGuardrailMessage(null);
     setIsStreaming(true);
     
     // Create EventSource
@@ -90,7 +93,14 @@ export function useSSE(url: string | null): UseSSEResult {
       eventSource.close();
       setIsStreaming(false);
     };
-    
+
+    // Handle guardrail rejection
+    const handleGuardrailReject = (event: MessageEvent) => {
+      setGuardrailMessage(event.data);
+      eventSource.close();
+      setIsStreaming(false);
+    };
+
     // Register event listeners
     eventSource.addEventListener('story_chunk', handleChunk);
     // Backend sends final graph on the default 'message' event; keep legacy name as fallback.
@@ -98,10 +108,12 @@ export function useSSE(url: string | null): UseSSEResult {
     eventSource.addEventListener('graph_data', handleGraph);
     eventSource.addEventListener('end', handleEnd);
     eventSource.addEventListener('error', handleBackendError as EventListener);
+    eventSource.addEventListener('guardrail_reject', handleGuardrailReject as EventListener);
     eventSource.onerror = handleConnectionError;
-    
+
     // Cleanup on unmount or URL change
     return () => {
+      eventSource.removeEventListener('guardrail_reject', handleGuardrailReject as EventListener);
       eventSource.close();
       setIsStreaming(false);
     };
@@ -112,6 +124,7 @@ export function useSSE(url: string | null): UseSSEResult {
     graphData,
     isStreaming,
     error,
+    guardrailMessage,
     closeStream,
   };
 }
