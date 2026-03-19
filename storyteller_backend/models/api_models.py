@@ -5,13 +5,20 @@ These models define the data contracts for all API endpoints.
 """
 
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Literal
 from datetime import datetime
+
+
+class PromptScreenResult(BaseModel):
+    """Result of the guardrail intent classifier."""
+
+    verdict: Literal["pass", "fail"]  # pass = faithful exploration, fail = malicious intent
+    reason: str  # logged server-side, never shown to user
 
 
 class StoryRequest(BaseModel):
     """Request model for story generation."""
-    
+
     prompt: str = Field(
         ...,
         min_length=1,
@@ -26,11 +33,11 @@ class StoryRequest(BaseModel):
         default=False,
         description="Whether to start a new story journey"
     )
-    story_length: int = Field(
-        default=1500,
-        ge=500,
-        le=3000,
-        description="Desired story length in tokens"
+    paragraph_count: int = Field(
+        default=4,
+        ge=1,
+        le=8,
+        description="Number of paragraphs (1-8)"
     )
     persona_name: Optional[str] = Field(
         default=None,

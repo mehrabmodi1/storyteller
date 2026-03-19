@@ -56,10 +56,16 @@ class StorytellerState(TypedDict):
     # ============================================
     story: str
     """The most recently generated story text."""
-    
-    story_length: int
-    """The desired length of the story in tokens."""
-    
+
+    paragraph_count: int
+    """Number of paragraphs to generate (1–8). Translates to ~200 words per paragraph."""
+
+    path_context: str
+    """Assembled journey context: summaries of ancestor story nodes, root to parent."""
+
+    guardrail_rejected: bool
+    """Set to True by screen_prompt when a prompt is flagged. Prevents generation."""
+
     last_story: Optional[str]
     """The story from the previous turn, to be used as context."""
     

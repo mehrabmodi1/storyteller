@@ -74,9 +74,15 @@ class Config:
     semantic_weight: float = 0.5
     
     # Story Generation
-    default_story_length: int = 1500
-    min_story_length: int = 500
-    max_story_length: int = 3000
+    default_paragraph_count: int = 4
+    min_paragraph_count: int = 1
+    max_paragraph_count: int = 8
+    words_per_paragraph: int = 200        # Used in prompt instruction
+    max_tokens_per_paragraph: int = 300   # Used for max_tokens ceiling
+
+    # LLM Model Names
+    summary_model: str = "gpt-4o-mini"
+    guardrail_model: str = "gpt-4o-mini"
     
     # Authentication
     auth_mode: Literal["self_hosted", "per_request_key", "credit_system"] = "self_hosted"
@@ -182,21 +188,37 @@ class Settings:
         return self._config.semantic_weight
     
     @property
-    def default_story_length(self) -> int:
-        return self._config.default_story_length
-    
+    def default_paragraph_count(self) -> int:
+        return self._config.default_paragraph_count
+
     @property
-    def min_story_length(self) -> int:
-        return self._config.min_story_length
-    
+    def min_paragraph_count(self) -> int:
+        return self._config.min_paragraph_count
+
     @property
-    def max_story_length(self) -> int:
-        return self._config.max_story_length
-    
+    def max_paragraph_count(self) -> int:
+        return self._config.max_paragraph_count
+
+    @property
+    def words_per_paragraph(self) -> int:
+        return self._config.words_per_paragraph
+
+    @property
+    def max_tokens_per_paragraph(self) -> int:
+        return self._config.max_tokens_per_paragraph
+
+    @property
+    def summary_model(self) -> str:
+        return self._config.summary_model
+
+    @property
+    def guardrail_model(self) -> str:
+        return self._config.guardrail_model
+
     @property
     def auth_mode(self) -> Literal["self_hosted", "per_request_key", "credit_system"]:
         return self._config.auth_mode
-    
+
     # ============================================
     # Computed Properties
     # ============================================
@@ -204,20 +226,16 @@ class Settings:
     def data_path(self) -> Path:
         """Get data directory as Path object."""
         return Path(self.data_dir).resolve()
-    
+
     @property
     def saved_graphs_path(self) -> Path:
         """Get saved graphs directory as Path object."""
         return Path(self.saved_graphs_dir).resolve()
-    
+
     @property
     def personas_path(self) -> Path:
         """Get personas file as Path object."""
         return Path(self.personas_file).resolve()
-    
-    def validate_story_length(self, length: int) -> int:
-        """Validate and clamp story length to allowed range."""
-        return max(self.min_story_length, min(length, self.max_story_length))
 
 
 # Global settings instance
