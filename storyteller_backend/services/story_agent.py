@@ -101,6 +101,50 @@ def get_last_story(state: StorytellerState) -> Dict[str, Any]:
     return {"last_story": last_story, "parent_image_prompt": parent_image_prompt}
 
 
+def build_path_context(state: StorytellerState) -> Dict[str, Any]:
+    """
+    Assembles journey context by walking the graph from root to the parent
+    story node of the current choice, collecting per-node summaries.
+
+    For root nodes (no choice_id), returns empty path context.
+    """
+    print(f"--- Node: build_path_context @ {datetime.now()} ---")
+    choice_id = state.get('current_choice_id')
+
+    if not choice_id:
+        return {"path_context": ""}
+
+    graph = state['graph']
+
+    # Walk predecessors from choice_id back to root, collecting story nodes
+    story_nodes = []
+    current = choice_id
+    while True:
+        predecessors = list(graph.predecessors(current))
+        if not predecessors:
+            break
+        parent = predecessors[0]
+        parent_data = graph.nodes[parent]
+        if parent_data.get('type') == 'story':
+            story_nodes.insert(0, parent_data)  # prepend to maintain root-first order
+        current = parent
+
+    if not story_nodes:
+        return {"path_context": ""}
+
+    # Build numbered list of summaries, skipping nodes without summaries.
+    # Use a separate counter so numbering is always contiguous (1, 2, 3...)
+    lines = []
+    counter = 1
+    for node_data in story_nodes:
+        summary = node_data.get('summary', '').strip()
+        if summary:
+            lines.append(f"{counter}. {summary}")
+            counter += 1
+
+    return {"path_context": "\n".join(lines)}
+
+
 def generate_search_query(state: StorytellerState) -> Dict[str, Any]:
     """
     Takes the user's prompt and generates a targeted search query.
