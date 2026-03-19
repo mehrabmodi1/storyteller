@@ -135,6 +135,15 @@ class JourneyManager:
         
         return graph_name
     
+    def list_users(self) -> List[str]:
+        """List all usernames that have saved journeys."""
+        if not os.path.isdir(self.base_dir):
+            return []
+        return sorted([
+            d for d in os.listdir(self.base_dir)
+            if os.path.isdir(os.path.join(self.base_dir, d)) and not d.startswith('.')
+        ])
+
     def list_journeys(self, username: str) -> List[JourneyMeta]:
         """
         List all saved journeys for a user, with metadata.

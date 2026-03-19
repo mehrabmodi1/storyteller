@@ -26,22 +26,22 @@ class GraphState:
     def __init__(self):
         self._graph: nx.DiGraph = nx.DiGraph()
         self._lock = asyncio.Lock()
-    
+
     async def get_graph(self) -> nx.DiGraph:
         """Get a copy of the current graph."""
         async with self._lock:
             return self._graph.copy()
-    
+
     async def set_graph(self, graph: nx.DiGraph) -> None:
         """Set the current graph (replaces existing)."""
         async with self._lock:
             self._graph = graph.copy()
-    
+
     async def clear_graph(self) -> None:
         """Clear the current graph."""
         async with self._lock:
             self._graph = nx.DiGraph()
-    
+
     async def is_empty(self) -> bool:
         """Check if the current graph is empty."""
         async with self._lock:

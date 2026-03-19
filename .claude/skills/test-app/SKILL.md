@@ -52,6 +52,13 @@ The agent MUST interact with the app exactly as a human user would. This is non-
 - Use `browser_navigate` for page loads/reloads.
 - Do NOT use `browser_evaluate` to programmatically trigger actions (e.g. `element.click()` via JS). The agent must click via the Playwright input pipeline, not the DOM API.
 
+### Graph Panning and Zooming
+
+- **Pan the graph canvas:** Click and drag on an empty area of the graph (not on any node). Use `browser_click` at a point with no nodes, hold, then `browser_drag` to the desired position. This scrolls the viewport to reveal off-screen nodes.
+- **Zoom out:** Use `browser_press_key` with scroll-down (or use `browser_evaluate` with `wheel` events on the graph canvas) to zoom out. Zooming out 3-4 levels lets you see the full tree structure in one screenshot.
+- **Zoom in:** Scroll up on the graph canvas to zoom in on a specific area.
+- **When to pan/zoom:** If a test requires interacting with nodes that are not visible in the current viewport (e.g. navigating back to earlier nodes, verifying full graph structure), pan and/or zoom out first. Take a screenshot after panning to confirm the target nodes are visible before clicking them.
+
 ## Procedure
 
 ### Phase 1: Server Readiness

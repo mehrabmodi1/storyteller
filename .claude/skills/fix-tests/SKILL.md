@@ -54,6 +54,13 @@ The agent MUST interact with the app exactly as a human user would. This is non-
 - Use `browser_navigate` for page loads/reloads.
 - Do NOT use `browser_evaluate` to programmatically trigger actions (e.g. `element.click()` via JS). The agent must click via the Playwright input pipeline, not the DOM API.
 
+### Graph Panning and Zooming
+
+- **Pan the graph canvas:** Click and drag on an empty area of the graph (not on any node). Use `browser_click` at a point with no nodes, hold, then `browser_drag` to the desired position. This scrolls the viewport to reveal off-screen nodes.
+- **Zoom out:** Use `browser_press_key` with scroll-down (or use `browser_evaluate` with `wheel` events on the graph canvas) to zoom out. Zooming out 3-4 levels lets you see the full tree structure in one screenshot.
+- **Zoom in:** Scroll up on the graph canvas to zoom in on a specific area.
+- **When to pan/zoom:** If a test requires interacting with nodes that are not visible in the current viewport (e.g. navigating back to earlier nodes, verifying full graph structure), pan and/or zoom out first. Take a screenshot after panning to confirm the target nodes are visible before clicking them.
+
 ## Procedure
 
 ### Phase 1: Read Report
@@ -77,9 +84,15 @@ The agent MUST interact with the app exactly as a human user would. This is non-
 
 3. Build a failure list: every test with `✗ FAIL` in its status line (including `FAIL (expected)`). Record the test id, title, and failure description.
 
-4. If no failures found, output "All tests passing — nothing to fix." and exit.
+4. **Check for a prior fix-log:** Read `fix-log.md` from the same results directory if it exists. This contains root cause analysis, planned fixes, and implementation notes from a previous fix-tests run against this same test report. For each failing test:
+   - If the fix-log shows a fix was **planned but never implemented** (has a "Planned fix" entry but no "Implemented" entry) — that fix still needs to be done. Prioritise it.
+   - If the fix-log shows a fix was **implemented but the test still fails** — the fix was insufficient or wrong. Do not repeat the same approach; try a different strategy.
+   - If the fix-log shows **no entry** for a test — it hasn't been analysed yet.
+   Output a brief summary of what the fix-log tells you before proceeding.
 
-5. Output the failure list to the user before proceeding.
+5. If no failures found, output "All tests passing — nothing to fix." and exit.
+
+6. Output the failure list to the user before proceeding.
 
 ### Phase 2: Fix Loop
 
@@ -114,11 +127,38 @@ Wait up to 15 seconds for both to become healthy. If either fails to start, abor
   - Frontend code: `storyteller_frontend/src/` (React components in `components/`, hooks in `hooks/`, services in `services/`, context in `context/`)
   - Backend code: `storyteller_backend/` (FastAPI routes in `api/routes/`, services in `services/`, models in `models/`)
 
+**a.1) Log analysis to the fix-log:**
+- Write to `validation/results/<timestamp>/fix-log.md` — the same results directory as the test report being fixed
+- Append an entry for this test under a `## Test N: <title>` heading
+- Record: root cause analysis, which files are involved, and the planned fix
+- Use this format:
+  ```markdown
+  ## Test N: <title>
+  **Attempt:** N/3
+  **Root cause:** <one-paragraph analysis>
+  **Files involved:** <list of files>
+  **Planned fix:** <what you intend to change>
+  ```
+- Update the same test's section on retry attempts rather than duplicating — add a new `**Attempt:**` block
+
 **b) Implement the fix or feature:**
 - For bug fixes: identify the root cause and fix it
 - For unimplemented features (`status: unimplemented` in manifest): implement the feature as described by the test instructions
 - Edit frontend and/or backend code as needed
 - Keep changes minimal and focused — fix the specific issue, don't refactor surrounding code
+
+**b.1) GATE — Verify code was actually changed before proceeding:**
+- Run `git diff --stat` and confirm at least one file was modified
+- If no files were changed, you have NOT implemented the fix — go back to step (b)
+- Do NOT proceed to verification (step d) without passing this gate
+- Analyzing the problem and planning a fix is not the same as implementing it — you must have actually edited files
+
+**b.2) Log implementation to the fix-log:**
+- Append to the current test's section in `validation/results/<timestamp>/fix-log.md`:
+  ```markdown
+  **Implemented:** <one-line summary of what was changed>
+  **Files changed:** <output of git diff --stat>
+  ```
 
 **c) Handle backend code changes:**
 - Frontend changes are picked up automatically by Vite HMR — no restart needed.

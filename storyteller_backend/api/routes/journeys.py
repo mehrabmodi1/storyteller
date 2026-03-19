@@ -24,6 +24,13 @@ from api.dependencies import get_graph_state
 router = APIRouter()
 
 
+@router.get("/list_users")
+async def list_users():
+    """List all usernames that have saved journeys."""
+    journey_manager = get_journey_manager()
+    return {"users": journey_manager.list_users()}
+
+
 @router.get("/list_graphs", response_model=JourneyListResponse)
 async def list_graphs(username: str = Query(..., description="Username to list journeys for")):
     """
