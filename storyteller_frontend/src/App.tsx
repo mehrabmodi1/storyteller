@@ -303,7 +303,7 @@ function AppContent() {
 function App() {
   return (
     <ErrorBoundary>
-      <AppProvider>ßß
+      <AppProvider>
         <AppContent />
       </AppProvider>
     </ErrorBoundary>
