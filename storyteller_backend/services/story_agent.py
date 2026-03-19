@@ -150,24 +150,31 @@ async def _generate_node_summary(story: str, prompt: str, api_key: str) -> str:
     Generates a ~100-token summary of a story chapter, describing key events
     and how the chapter addresses the user's prompt.
 
-    Called with await inside update_graph_with_story.
+    Returns empty string on any failure — summary is non-critical.
     """
-    summary_llm = ChatOpenAI(
-        temperature=0,
-        model_name=settings.summary_model,
-        api_key=api_key,
-    )
-    system = (
-        "You are a concise story archivist. Summarize the following story chapter "
-        "in 2-3 sentences (approximately 100 tokens). Describe the key events and "
-        f"how they address the user's intent: '{prompt}'"
-    )
-    messages = [
-        {"role": "system", "content": system},
-        {"role": "user", "content": story},
-    ]
-    response = await summary_llm.ainvoke(messages)
-    return response.content.strip()
+    try:
+        summary_llm = ChatOpenAI(
+            temperature=0,
+            model_name=settings.summary_model,
+            api_key=api_key,
+        )
+        system = (
+            "You are a concise story archivist. Summarize the following story chapter "
+            "in 2-3 sentences (approximately 100 tokens). Describe the key events and "
+            f"how they address the user's intent: '{prompt[:200]}'"  # truncate long prompts
+        )
+        messages = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": story},
+        ]
+        response = await asyncio.wait_for(
+            summary_llm.ainvoke(messages),
+            timeout=15.0
+        )
+        return getattr(response, 'content', '') or ''
+    except Exception as e:
+        print(f"[summary] Failed to generate summary: {e}")
+        return ""
 
 
 def generate_search_query(state: StorytellerState) -> Dict[str, Any]:
