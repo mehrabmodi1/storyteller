@@ -145,6 +145,31 @@ def build_path_context(state: StorytellerState) -> Dict[str, Any]:
     return {"path_context": "\n".join(lines)}
 
 
+async def _generate_node_summary(story: str, prompt: str, api_key: str) -> str:
+    """
+    Generates a ~100-token summary of a story chapter, describing key events
+    and how the chapter addresses the user's prompt.
+
+    Called with await inside update_graph_with_story.
+    """
+    summary_llm = ChatOpenAI(
+        temperature=0,
+        model_name=settings.summary_model,
+        api_key=api_key,
+    )
+    system = (
+        "You are a concise story archivist. Summarize the following story chapter "
+        "in 2-3 sentences (approximately 100 tokens). Describe the key events and "
+        f"how they address the user's intent: '{prompt}'"
+    )
+    messages = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": story},
+    ]
+    response = await summary_llm.ainvoke(messages)
+    return response.content.strip()
+
+
 def generate_search_query(state: StorytellerState) -> Dict[str, Any]:
     """
     Takes the user's prompt and generates a targeted search query.
@@ -363,14 +388,14 @@ You must explicitly reference how the current chapter connects to the previous c
     return {"story": full_story, "image_url": image_url, "image_prompt": image_prompt}
 
 
-def update_graph_with_story(state: StorytellerState) -> Dict[str, Any]:
+async def update_graph_with_story(state: StorytellerState) -> Dict[str, Any]:
     """
     Adds the newly generated story as a node to the graph.
     If a choice from a previous step led to this story, it connects them.
-    
+
     Args:
         state: Current storyteller state
-    
+
     Returns:
         Dict with updated graph and latest_story_node_id
     """
@@ -380,15 +405,15 @@ def update_graph_with_story(state: StorytellerState) -> Dict[str, Any]:
     image_url = state.get('image_url')
     image_prompt = state.get('image_prompt')
     last_message = state['messages'][-1].content
-    
+
     # The parent node is the choice that was clicked to trigger this story
     parent_node_id = state.get('current_choice_id')
 
     story_node_id = f"story_{uuid4()}"
     graph.add_node(
-        story_node_id, 
-        label=f"Chapter: \"{last_message[:30]}...\"", 
-        story=story, 
+        story_node_id,
+        label=f"Chapter: \"{last_message[:30]}...\"",
+        story=story,
         image_url=image_url,
         image_prompt=image_prompt,
         type='story',
@@ -397,15 +422,22 @@ def update_graph_with_story(state: StorytellerState) -> Dict[str, Any]:
 
     if parent_node_id:
         graph.add_edge(parent_node_id, story_node_id)
-    
-    # Automatic save after update
+
+    # Generate a summary of this chapter and await it before graph save.
+    # This is a direct await (not create_task) since there is no concurrent
+    # work to overlap with inside this node.
+    summary = await _generate_node_summary(story, last_message, ACTIVE_OPENAI_API_KEY)
+    graph.nodes[story_node_id]['summary'] = summary
+    print(f"Generated summary for node {story_node_id}: {summary[:60]}...")
+
+    # Automatic save after update (summary is now persisted)
     journey_manager = get_journey_manager()
     username = state.get('username', 'default_user')
     initial_prompt = state.get('initial_prompt', last_message)
     last_prompt = last_message
     persona = state.get('persona_name', 'default')
     corpus_name = state.get('corpus_name', 'mahabharata')
-    
+
     journey_manager.save_graph(
         graph, username, initial_prompt, last_prompt, persona, corpus_name
     )
