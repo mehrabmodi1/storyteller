@@ -16,7 +16,7 @@ import traceback
 
 from models.state import StorytellerState
 from models.api_models import StoryRequest
-from services import get_story_agent
+from services import get_story_agent, get_journey_manager
 from embed_retrieve import get_registry
 from api.dependencies import get_graph_state
 
@@ -27,11 +27,12 @@ async def story_generation_events(
     prompt: str,
     choice_id: Optional[str] = None,
     new_journey: bool = False,
-    story_length: int = 1500,
+    paragraph_count: int = 4,
     persona_name: Optional[str] = None,
     randomize_retrieval: bool = False,
     username: Optional[str] = None,
-    corpus_name: Optional[str] = None
+    corpus_name: Optional[str] = None,
+    graph_id: Optional[str] = None
 ):
     """
     Generate story events via SSE streaming.
@@ -44,6 +45,11 @@ async def story_generation_events(
     """
     graph_state = get_graph_state()
     
+    # Test error trigger: passing corpus_name "__test_error__" forces an error response
+    if corpus_name == "__test_error__":
+        yield {"event": "error", "data": "Test error triggered: simulated stream failure."}
+        return
+
     # Validate corpus if specified
     if corpus_name:
         registry = get_registry()
@@ -64,18 +70,32 @@ async def story_generation_events(
     try:
         # Get current graph
         current_graph = await graph_state.get_graph()
-        
+
         # If this is a new journey, clear the graph
         if new_journey:
             current_graph = nx.DiGraph()
             await graph_state.clear_graph()
-        
-        # If a choice was selected, it must exist in the graph
+
+        # If continuing a journey (choice_id provided), ensure the graph is loaded
         if choice_id and choice_id not in current_graph:
-            print(f"ERROR: Client requested choice_id '{choice_id}' which does not exist in the server's graph.")
-            print(f"Available nodes: {list(current_graph.nodes())}")
-            yield {"event": "error", "data": "Client and server are out of sync. Please start a new journey."}
-            return
+            # In-memory graph doesn't have this node — load from disk
+            if graph_id and username:
+                try:
+                    journey_manager = get_journey_manager()
+                    current_graph, _meta = journey_manager.load_graph(username, graph_id)
+                    await graph_state.set_graph(current_graph)
+                    print(f"Loaded graph '{graph_id}' from disk for user '{username}'")
+                except (FileNotFoundError, ValueError) as e:
+                    print(f"Failed to load graph from disk: {e}")
+                    yield {"event": "error", "data": f"Could not load saved journey: {e}"}
+                    return
+
+            # Still not found after disk load attempt
+            if choice_id not in current_graph:
+                print(f"ERROR: Client requested choice_id '{choice_id}' which does not exist in the server's graph.")
+                print(f"Available nodes: {list(current_graph.nodes())}")
+                yield {"event": "error", "data": "Client and server are out of sync. Please start a new journey."}
+                return
         
         # If a choice was selected, update its label in the graph to persist edits
         if choice_id and choice_id in current_graph:
@@ -91,7 +111,9 @@ async def story_generation_events(
             "retrieved_chunks": [],
             "story": "",
             "choices": [],
-            "story_length": story_length,
+            "paragraph_count": paragraph_count,
+            "path_context": "",
+            "guardrail_rejected": False,
             "last_story": None,
             "serializable_graph": None,
             "persona_name": persona_name,
@@ -151,47 +173,27 @@ async def stream_story(
     prompt: str = Query(..., description="User's story prompt"),
     choice_id: Optional[str] = Query(None, description="ID of selected choice node"),
     new_journey: bool = Query(False, description="Start a new journey"),
-    story_length: int = Query(1500, ge=500, le=3000, description="Desired story length"),
+    paragraph_count: int = Query(4, ge=1, le=8, description="Number of paragraphs to generate (1-8)"),
     persona_name: Optional[str] = Query(None, description="Storyteller persona"),
     randomize_retrieval: bool = Query(False, description="Randomize retrieval results"),
     username: Optional[str] = Query(None, description="Username for saving"),
-    corpus_name: Optional[str] = Query("mahabharata", description="Text corpus to use")
+    corpus_name: Optional[str] = Query("mahabharata", description="Text corpus to use"),
+    graph_id: Optional[str] = Query(None, description="Graph ID for loading persisted journey on continuation")
 ):
     """
     Stream story generation via Server-Sent Events (SSE).
-    
-    This endpoint generates a story based on the user's prompt and streams
-    the result token by token for real-time display in the UI.
-    
-    Event Types:
-    - story_chunk: Individual story tokens
-    - message: Final graph data (JSON)
-    - end: Stream completion
-    - error: Error messages
-    
-    Args:
-        prompt: User's story prompt or chosen follow-up
-        choice_id: If continuing a story, the ID of the selected choice
-        new_journey: If True, starts a new story (clears current graph)
-        story_length: Desired story length in tokens (500-3000)
-        persona_name: Name of the storyteller persona to use
-        randomize_retrieval: If True, randomizes retrieval for exploration
-        username: Username for saving the journey
-        corpus_name: Name of the corpus to use for generation
-    
-    Returns:
-        Server-Sent Events stream
     """
     return EventSourceResponse(
         story_generation_events(
             prompt=prompt,
             choice_id=choice_id,
             new_journey=new_journey,
-            story_length=story_length,
+            paragraph_count=paragraph_count,
             persona_name=persona_name,
             randomize_retrieval=randomize_retrieval,
             username=username,
-            corpus_name=corpus_name
+            corpus_name=corpus_name,
+            graph_id=graph_id
         )
     )
 

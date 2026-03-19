@@ -1,6 +1,24 @@
 import networkx as nx
 import pytest
 from langchain_core.messages import HumanMessage
+import api.dependencies as _deps
+from sse_starlette.sse import AppStatus
+
+
+@pytest.fixture(autouse=True)
+def reset_singletons():
+    """Reset module-level singletons that hold event-loop-bound asyncio objects.
+
+    - GraphState: holds an asyncio.Lock created per-request, must be fresh per test.
+    - AppStatus.should_exit_event: sse_starlette class attribute holding an anyio.Event
+      that gets bound to the event loop of the first SSE request. Subsequent tests with
+      a new event loop fail unless this is cleared.
+    """
+    _deps._graph_state = None
+    AppStatus.should_exit_event = None
+    yield
+    _deps._graph_state = None
+    AppStatus.should_exit_event = None
 
 
 @pytest.fixture

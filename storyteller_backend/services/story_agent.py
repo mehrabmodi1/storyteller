@@ -236,7 +236,9 @@ async def generate_story(state: StorytellerState, config: RunnableConfig) -> Dic
         Dict with story, image_url, and image_prompt
     """
     print(f"--- Node: generate_story @ {datetime.now()} ---")
-    story_length = state['story_length']
+    paragraph_count = state['paragraph_count']
+    word_target = paragraph_count * settings.words_per_paragraph
+    token_ceiling = paragraph_count * settings.max_tokens_per_paragraph
     last_story = state.get('last_story')
     parent_image_prompt = state.get('parent_image_prompt')
     persona_name = state.get('persona_name')
@@ -250,7 +252,7 @@ async def generate_story(state: StorytellerState, config: RunnableConfig) -> Dic
 
     # Default system prompt if no persona is selected
     base_system_prompt = """You are a master storyteller. Your task is to weave a cohesive and engaging story from the provided source material, inspired by the user's prompt.
-        The story's length and level of detail should be appropriate for approximately {story_length} tokens.
+        Write approximately {paragraph_count} paragraphs (roughly {word_target} words).
         Do not just summarize the chunks; create a rich narrative, staying true to the events described in the source material.
 
         Grounding constraints (must follow):
@@ -270,12 +272,12 @@ async def generate_story(state: StorytellerState, config: RunnableConfig) -> Dic
 PREVIOUS CHAPTER:
 {last_story}
 
-Your task is to use the following text chunks as source material to write the next chapter of about {story_length} tokens. Your story MUST be as long as specified - deviation in n tokens shouldn't be more than 10%. 
+Your task is to use the following text chunks as source material to write the next chapter of approximately {paragraph_count} paragraphs (roughly {word_target} words).
 You must explicitly reference how the current chapter connects to the previous chapter. Transition gracefully from the previous chapter to the current one. The story should be inspired by the user's prompt."""
         else:
             # Add context for starting a new story
             system_prompt += """Use the provided source material to write a story inspired by the user's prompt.
-The story's length and level of detail should be appropriate for approximately {story_length} tokens.
+Write approximately {paragraph_count} paragraphs (roughly {word_target} words).
 Do not just summarize the chunks; create a rich narrative, staying true to the events described in the source material.
 
 Grounding constraints (must follow):
@@ -290,7 +292,7 @@ Grounding constraints (must follow):
 PREVIOUS CHAPTER:
 {last_story}
 
-Your task is to use the following text chunks as source material to write the next chapter of about {story_length} tokens. Your story MUST be as long as specified - deviation in n tokens shouldn't be more than 10%. 
+Your task is to use the following text chunks as source material to write the next chapter of approximately {paragraph_count} paragraphs (roughly {word_target} words).
 You must explicitly reference how the current chapter connects to the previous chapter. Transition gracefully from the previous chapter to the current one. The story should be inspired by the user's prompt."""
         else:
             system_prompt = base_system_prompt
@@ -308,6 +310,7 @@ You must explicitly reference how the current chapter connects to the previous c
         model_name=settings.chat_model,
         streaming=True,
         api_key=ACTIVE_OPENAI_API_KEY,
+        max_tokens=token_ceiling,
     )
 
     story_generation_chain = prompt | story_llm
@@ -319,7 +322,8 @@ You must explicitly reference how the current chapter connects to the previous c
     invoke_params = {
         "input": last_message,
         "chunks": chunks_str,
-        "story_length": story_length
+        "paragraph_count": paragraph_count,
+        "word_target": word_target,
     }
 
     if last_story:
