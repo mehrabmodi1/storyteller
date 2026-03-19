@@ -88,7 +88,8 @@ class TestScreenPromptNode:
         assert result["guardrail_rejected"] is False
 
     @pytest.mark.asyncio
-    async def test_sets_guardrail_rejected_true_when_moderation_fails(self):
+    async def test_moderation_alone_does_not_reject_when_classifier_passes(self):
+        """Moderation API alone is not the primary gate; classifier pass allows the prompt."""
         state = make_state(nx.DiGraph())
 
         with patch("services.story_agent._check_moderation", AsyncMock(return_value=False)), \
@@ -96,7 +97,7 @@ class TestScreenPromptNode:
                    AsyncMock(return_value=PromptScreenResult(verdict="pass", reason="ok"))):
             result = await screen_prompt(state)
 
-        assert result["guardrail_rejected"] is True
+        assert result["guardrail_rejected"] is False
 
     @pytest.mark.asyncio
     async def test_sets_guardrail_rejected_true_when_classifier_fails(self):

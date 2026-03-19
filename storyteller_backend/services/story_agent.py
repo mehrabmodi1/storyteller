@@ -257,11 +257,16 @@ async def screen_prompt(state: StorytellerState) -> Dict[str, Any]:
         _classify_intent(prompt, corpus_name, api_key),
     )
 
-    rejected = not moderation_ok or classifier_result.verdict == "fail"
+    # The intent classifier is context-aware and is the primary gate.
+    # Moderation API alone is not sufficient to reject — it lacks corpus context.
+    rejected = classifier_result.verdict == "fail"
 
     if rejected:
         print(f"[guardrail] Prompt rejected. moderation_ok={moderation_ok}, "
               f"classifier={classifier_result.verdict}. Reason: {classifier_result.reason}")
+    elif not moderation_ok:
+        print(f"[guardrail] Moderation flagged but classifier passed. "
+              f"Reason: {classifier_result.reason}. Allowing (classifier is primary gate).")
 
     return {"guardrail_rejected": rejected}
 
