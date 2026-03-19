@@ -17,7 +17,7 @@ const elk = new ELK();
 export function useELKLayout(graph: TransformedGraph | null) {
   const [layout, setLayout] = useState<LayoutResult | null>(null);
   const [isRunning, setIsRunning] = useState(false);
-  const positionsRef = useRef<Map<string, XYPosition>>(new Map());
+  const initialLayoutDoneRef = useRef<boolean>(false);
 
   const nodeKey = useMemo(() => {
     if (!graph) return null;
@@ -29,7 +29,7 @@ export function useELKLayout(graph: TransformedGraph | null) {
   useEffect(() => {
     if (!graph || !graph.nodes.length) {
       setLayout(null);
-      positionsRef.current.clear();
+      initialLayoutDoneRef.current = false;
       return;
     }
 
@@ -53,36 +53,16 @@ export function useELKLayout(graph: TransformedGraph | null) {
           }
         });
 
-        const updatedPositions = new Map(positionsRef.current);
+        const isInitialLayout = !initialLayoutDoneRef.current;
+        const transitionStyle = isInitialLayout ? {} : { transition: 'transform 0.4s ease' };
 
-        // Remove cached positions for nodes that no longer exist
-        Array.from(updatedPositions.keys()).forEach((nodeId) => {
-          if (!layoutTarget.nodes.find((node) => node.id === nodeId)) {
-            updatedPositions.delete(nodeId);
-          }
-        });
+        const layoutedNodes = layoutTarget.nodes.map((node) => ({
+          ...node,
+          position: childPositions.get(node.id) ?? { x: 0, y: 0 },
+          style: { ...node.style, ...transitionStyle },
+        }));
 
-        const layoutedNodes = layoutTarget.nodes.map((node) => {
-          const existing = updatedPositions.get(node.id);
-          const suggested = childPositions.get(node.id);
-
-          const finalPosition: XYPosition =
-            existing ??
-            suggested ?? {
-              x: 0,
-              y: 0,
-            };
-
-          // Cache the position for future layouts
-          updatedPositions.set(node.id, finalPosition);
-
-          return {
-            ...node,
-            position: finalPosition,
-          };
-        });
-
-        positionsRef.current = updatedPositions;
+        initialLayoutDoneRef.current = true;
 
         setLayout({
           nodes: layoutedNodes,
@@ -104,12 +84,10 @@ export function useELKLayout(graph: TransformedGraph | null) {
     return () => {
       cancelled = true;
     };
-  }, [graph, nodeKey]);
+  }, [nodeKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return {
     layout,
     isRunning,
   };
 }
-
-
