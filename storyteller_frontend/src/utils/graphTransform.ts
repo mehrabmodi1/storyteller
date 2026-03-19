@@ -7,6 +7,7 @@ import {
   StoryReactFlowEdge,
 } from '@/types/graph.types';
 import { DEFAULT_THEME } from '@/context/AppContext';
+import { GRAPH_VISUAL_CONFIG } from '@/config/graph.config';
 
 export interface TransformOptions {
   personaName?: string | null;
@@ -56,10 +57,14 @@ function transformNode(
 ): StoryReactFlowNode {
   const isStory = node.type === 'story';
 
+  const dimensions = isStory ? GRAPH_VISUAL_CONFIG.storyNode : GRAPH_VISUAL_CONFIG.choiceNode;
+
   return {
     id: node.id || `node-${index}`,
     type: isStory ? STORY_NODE_COMPONENT : CHOICE_NODE_COMPONENT,
     position: DEFAULT_POSITION,
+    width: dimensions.width,
+    height: dimensions.height,
     data: {
       id: node.id,
       type: node.type,

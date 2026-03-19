@@ -34,6 +34,7 @@ export interface GraphEdge {
 export interface GraphData {
   nodes: GraphNode[];
   links: GraphEdge[];
+  graph?: { graph_name?: string; [key: string]: unknown };
 }
 
 /**
