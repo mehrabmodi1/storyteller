@@ -46,6 +46,12 @@ ELK already only re-runs when `nodeKey` changes. `nodeKey` is derived from the s
 |------|--------|
 | `storyteller_frontend/src/hooks/useELKLayout.ts` | Remove `positionsRef` and all `existing ?? suggested` merging logic. Add `initialLayoutDoneRef`. Apply transition style after first layout. |
 
+## Implementation Notes
+
+**`useEffect` dependency array:** The current hook depends on `[graph, nodeKey]`. `nodeKey` is derived from `graph` via `useMemo`, so a change to `graph` that doesn't change structure (e.g. story text streaming in) correctly does not retrigger ELK because `nodeKey` is stable. Do not remove `graph` from the dependency array without verifying this invariant holds.
+
+**`initialLayoutDoneRef` reset location:** Reset `initialLayoutDoneRef.current = false` in the same early-return branch that currently calls `positionsRef.current.clear()` — i.e. `if (!graph || !graph.nodes.length)`. This ensures a newly loaded journey always snaps in without animation.
+
 No other files change.
 
 ## Edge Cases
