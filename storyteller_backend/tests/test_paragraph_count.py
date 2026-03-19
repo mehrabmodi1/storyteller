@@ -36,31 +36,31 @@ class TestParagraphCountValidation:
         # Mock the story agent so we don't make real API calls.
         # We only care that the endpoint accepts paragraph_count=1 (no 422).
         mock_agent = MagicMock()
-        mock_agent.astream_events = AsyncMock(return_value=aiter([]))
+        mock_agent.astream_events = AsyncMock(side_effect=lambda *a, **kw: aiter([]))
 
         with patch("api.routes.stories.get_story_agent", return_value=mock_agent):
             resp = client.get("/api/stream_story", params={**BASE_PARAMS, "paragraph_count": 1})
 
-        assert resp.status_code != 422
+        assert resp.status_code == 200
 
     def test_paragraph_count_at_max_accepted(self):
         mock_agent = MagicMock()
-        mock_agent.astream_events = AsyncMock(return_value=aiter([]))
+        mock_agent.astream_events = AsyncMock(side_effect=lambda *a, **kw: aiter([]))
 
         with patch("api.routes.stories.get_story_agent", return_value=mock_agent):
             resp = client.get("/api/stream_story", params={**BASE_PARAMS, "paragraph_count": 8})
 
-        assert resp.status_code != 422
+        assert resp.status_code == 200
 
     def test_no_paragraph_count_uses_default(self):
         # No paragraph_count param — should default to 4, not raise 422
         mock_agent = MagicMock()
-        mock_agent.astream_events = AsyncMock(return_value=aiter([]))
+        mock_agent.astream_events = AsyncMock(side_effect=lambda *a, **kw: aiter([]))
 
         with patch("api.routes.stories.get_story_agent", return_value=mock_agent):
             resp = client.get("/api/stream_story", params=BASE_PARAMS)
 
-        assert resp.status_code != 422
+        assert resp.status_code == 200
 
 
 def aiter(items):

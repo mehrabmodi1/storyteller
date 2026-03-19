@@ -509,6 +509,7 @@ def create_story_agent(api_key: Optional[str] = None):
     workflow = StateGraph(StorytellerState)
 
     # Add nodes to the graph
+    # TODO(Task 7): wire build_path_context and screen_prompt into workflow
     workflow.add_node("get_last_story", get_last_story)
     workflow.add_node("generate_search_query", generate_search_query)
     workflow.add_node("retrieve_chunks", retrieve_chunks)

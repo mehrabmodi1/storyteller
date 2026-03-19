@@ -112,8 +112,8 @@ async def story_generation_events(
             "story": "",
             "choices": [],
             "paragraph_count": paragraph_count,
-            "path_context": "",
-            "guardrail_rejected": False,
+            "path_context": "",          # populated by build_path_context node (Task 7)
+            "guardrail_rejected": False, # set by screen_prompt node (Task 7)
             "last_story": None,
             "serializable_graph": None,
             "persona_name": persona_name,
