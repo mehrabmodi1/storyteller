@@ -34,7 +34,7 @@ from config.settings import settings
 from models.state import StorytellerState
 from models.api_models import PromptScreenResult
 from embed_retrieve import HybridRetriever
-from services.image_generator import ImageGenerator
+from services.image_generator import ImageGenerator, resolve_image_urls
 from services.journey_manager import get_journey_manager
 ACTIVE_OPENAI_API_KEY = settings.openai_api_key
 
@@ -455,22 +455,28 @@ You must explicitly reference how the current chapter connects to the previous c
     # yielding the chunks back to the client.
     full_story = ""
     image_gen_task = None
-    min_chars_for_image = 1200
+    chars_per_word = 5
+    expected_chars = paragraph_count * settings.words_per_paragraph * chars_per_word
+    image_trigger_chars = expected_chars // 4
 
     async for chunk in story_generation_chain.astream(
-        invoke_params, 
+        invoke_params,
         config=config,
     ):
         full_story += chunk.content
-        # Once we have enough text, start the image generation in the background
-        if image_gen_task is None and len(full_story) > min_chars_for_image:
+        if image_gen_task is None and len(full_story) >= image_trigger_chars:
             image_generator = ImageGenerator()
-            if image_generator.should_generate_image(full_story):
-                image_gen_task = asyncio.create_task(
-                    image_generator.generate_image(full_story, parent_image_prompt)
-                )
+            image_gen_task = asyncio.create_task(
+                image_generator.generate_image(full_story, parent_image_prompt)
+            )
     
-    # Wait for the image generation to complete
+    # If stream ended before trigger threshold, fire now with full text
+    if image_gen_task is None and full_story:
+        image_generator = ImageGenerator()
+        image_gen_task = asyncio.create_task(
+            image_generator.generate_image(full_story, parent_image_prompt)
+        )
+
     image_url, image_prompt = None, None
     if image_gen_task:
         result = await image_gen_task
@@ -644,7 +650,7 @@ def update_graph_with_choices(state: StorytellerState) -> Dict[str, Any]:
     )
 
     # Serialize the graph for the frontend
-    serializable_graph = nx.node_link_data(graph)
+    serializable_graph = resolve_image_urls(nx.node_link_data(graph))
 
     return {"graph": graph, "serializable_graph": serializable_graph}
 

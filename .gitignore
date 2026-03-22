@@ -58,5 +58,6 @@ data/
 src/app/.next/
 src/app/node_modules/
 saved_graphs/
+saved_graphs/images/
 src/interface/
 documentation/cursor_chats/

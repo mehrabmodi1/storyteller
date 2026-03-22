@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException, status, Query
 from typing import List
 import networkx as nx
 
+from services.image_generator import resolve_image_urls
 from models.api_models import (
     JourneyListResponse,
     LoadGraphRequest,
@@ -74,13 +75,21 @@ async def load_graph(request: LoadGraphRequest):
     try:
         # Load graph from file
         graph, meta = journey_manager.load_graph(request.username, request.graph_id)
-        
+
         # Set as current graph
         await graph_state.set_graph(graph)
-        
+
+        # Serialize graph for the response
+        serializable = resolve_image_urls(nx.node_link_data(graph))
+        graph_data = GraphData(
+            nodes=serializable.get("nodes", []),
+            links=serializable.get("links", []),
+        )
+
         return LoadGraphResponse(
             success=True,
-            meta=meta
+            meta=meta,
+            graph=graph_data,
         )
     
     except FileNotFoundError:
@@ -119,8 +128,8 @@ async def get_loaded_graph():
         graph = await graph_state.get_graph()
         
         # Convert to node-link format
-        serializable_graph = nx.node_link_data(graph)
-        
+        serializable_graph = resolve_image_urls(nx.node_link_data(graph))
+
         # Convert to our GraphData model
         graph_data = GraphData(
             nodes=serializable_graph.get("nodes", []),

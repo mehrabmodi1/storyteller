@@ -7,6 +7,7 @@ and startup/shutdown event handlers.
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 
 from config.settings import settings
@@ -25,6 +26,9 @@ async def lifespan(app: FastAPI):
     - Clean up resources
     """
     # Startup
+    if settings.local_image_storage:
+        settings.image_storage_path.mkdir(parents=True, exist_ok=True)
+
     print("=" * 60)
     print("Storyteller Backend Starting...")
     print(f"   API Host: {settings.api_host}:{settings.api_port}")
@@ -67,6 +71,13 @@ app.include_router(stories.router, prefix="/api", tags=["stories"])
 app.include_router(personas.router, prefix="/api", tags=["personas"])
 app.include_router(corpuses.router, prefix="/api", tags=["corpuses"])
 app.include_router(journeys.router, prefix="/api", tags=["journeys"])
+
+if settings.local_image_storage:
+    app.mount(
+        "/images",
+        StaticFiles(directory=str(settings.image_storage_path)),
+        name="images",
+    )
 
 
 @app.get("/")

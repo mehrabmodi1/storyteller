@@ -87,6 +87,10 @@ class Config:
     # Authentication
     auth_mode: Literal["self_hosted", "per_request_key", "credit_system"] = "self_hosted"
 
+    # Image Storage
+    local_image_storage: bool = True
+    image_storage_limit_mb: int = 100
+
 
 # ============================================
 # COMBINED SETTINGS
@@ -219,6 +223,14 @@ class Settings:
     def auth_mode(self) -> Literal["self_hosted", "per_request_key", "credit_system"]:
         return self._config.auth_mode
 
+    @property
+    def local_image_storage(self) -> bool:
+        return self._config.local_image_storage
+
+    @property
+    def image_storage_limit_mb(self) -> int:
+        return self._config.image_storage_limit_mb
+
     # ============================================
     # Computed Properties
     # ============================================
@@ -236,6 +248,11 @@ class Settings:
     def personas_path(self) -> Path:
         """Get personas file as Path object."""
         return Path(self.personas_file).resolve()
+
+    @property
+    def image_storage_path(self) -> Path:
+        """Get image storage directory: saved_graphs/images/"""
+        return self.saved_graphs_path / "images"
 
 
 # Global settings instance

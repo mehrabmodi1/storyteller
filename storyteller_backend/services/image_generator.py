@@ -8,8 +8,11 @@ Handles AI image generation for story chapters:
 Migrated from src/agent/graph.py (generate_image_for_story function)
 """
 
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
 from datetime import datetime
+from pathlib import Path
+from uuid import uuid4
+import base64
 
 from config.settings import settings
 from services.auth_service import get_async_openai_client
@@ -38,7 +41,6 @@ class ImageGenerator:
         """
         self.client = get_async_openai_client(api_key)
         self.enable_generation = True  # Could be made configurable
-        self.min_chars_for_generation = 1200
     
     async def _generate_image_prompt(
         self,
@@ -85,32 +87,73 @@ Do NOT include any text, labels, or captions in your description."""
             print(f"Error generating image prompt: {e}")
             return None
     
-    async def _generate_dalle_image(self, image_prompt: str) -> Optional[str]:
+    async def _generate_dalle_image(self, image_prompt: str) -> Union[Optional[str], Optional[bytes]]:
         """
         Generate an image using DALL-E.
-        
-        Args:
-            image_prompt: The descriptive prompt for DALL-E
-        
-        Returns:
-            Image URL, or None if generation fails
+
+        When local_image_storage is enabled, returns raw PNG bytes (via b64_json).
+        Otherwise returns the temporary blob URL.
         """
         try:
+            use_b64 = settings.local_image_storage
             response = await self.client.images.generate(
                 model=settings.image_model,
                 prompt=STYLE_PREFIX + image_prompt,
                 n=1,
                 size=settings.image_generation_size,
+                response_format="b64_json" if use_b64 else "url",
             )
-            
-            image_url = response.data[0].url
-            print(f"Generated Image URL: {image_url}")
-            return image_url
-            
+
+            if use_b64:
+                image_bytes = base64.b64decode(response.data[0].b64_json)
+                print(f"Generated image ({len(image_bytes)} bytes)")
+                return image_bytes
+            else:
+                image_url = response.data[0].url
+                print(f"Generated Image URL: {image_url}")
+                return image_url
+
         except Exception as e:
             print(f"Error generating DALL-E image: {e}")
             return None
     
+    def _save_image_locally(self, image_bytes: bytes) -> Optional[str]:
+        """
+        Save raw image bytes to saved_graphs/images/{uuid}.png.
+        Returns the image UUID, or None on failure.
+        """
+        image_dir = settings.image_storage_path
+        image_dir.mkdir(parents=True, exist_ok=True)
+
+        self._enforce_storage_limit(image_dir)
+
+        image_id = str(uuid4())
+        file_path = image_dir / f"{image_id}.png"
+
+        try:
+            file_path.write_bytes(image_bytes)
+            print(f"Saved image locally: {file_path}")
+            return image_id
+        except Exception as e:
+            print(f"Error saving image locally: {e}")
+            return None
+
+    @staticmethod
+    def _enforce_storage_limit(image_dir: Path) -> None:
+        """
+        If the images folder exceeds the configured size limit,
+        delete oldest files (by creation time) until under the cap.
+        """
+        limit_bytes = settings.image_storage_limit_mb * 1024 * 1024
+        files = sorted(image_dir.glob("*.png"), key=lambda f: f.stat().st_ctime)
+
+        total = sum(f.stat().st_size for f in files)
+        while total > limit_bytes and files:
+            oldest = files.pop(0)
+            total -= oldest.stat().st_size
+            oldest.unlink()
+            print(f"Evicted stale image: {oldest.name}")
+
     async def generate_image(
         self,
         story_text: str,
@@ -119,59 +162,52 @@ Do NOT include any text, labels, or captions in your description."""
     ) -> Tuple[Optional[str], Optional[str]]:
         """
         Generate an image for a story chapter.
-        
-        This is the main public method that orchestrates the full pipeline:
-        1. Generate descriptive prompt with GPT-4o-mini
-        2. Generate image with DALL-E
-        
-        Args:
-            story_text: The story chapter text
-            parent_image_prompt: Optional previous image prompt for continuity
-            story_node_id: Optional node ID (unused, kept for API compatibility)
-        
+
         Returns:
-            Tuple of (image_url, image_prompt), or (None, None) if generation fails
+            Tuple of (image_ref, image_prompt).
+            image_ref is a UUID (local storage) or a URL (cloud), or None.
         """
         print(f"--- Triggering Image Generation @ {datetime.now()} ---")
-        
+
         if not self.enable_generation:
             return None, None
-        
-        if len(story_text) < self.min_chars_for_generation:
-            print(f"Story too short for image generation ({len(story_text)} chars)")
-            return None, None
-        
+
         try:
-            # Step 1: Generate image prompt
             image_prompt = await self._generate_image_prompt(story_text, parent_image_prompt)
             if not image_prompt:
                 return None, None
-            
-            # Step 2: Generate image with DALL-E
-            image_url = await self._generate_dalle_image(image_prompt)
-            if not image_url:
+
+            result = await self._generate_dalle_image(image_prompt)
+            if not result:
                 return None, image_prompt
-            
-            return image_url, image_prompt
-            
+
+            if settings.local_image_storage:
+                image_id = self._save_image_locally(result)  # result is bytes
+                return image_id, image_prompt
+
+            return result, image_prompt  # result is URL string
+
         except Exception as e:
             print(f"An error occurred during image generation: {e}")
             return None, None
     
-    def should_generate_image(self, story_text: str) -> bool:
-        """
-        Check if an image should be generated for the given story text.
-        
-        Args:
-            story_text: The story text to check
-        
-        Returns:
-            True if image generation should proceed
-        """
-        return (
-            self.enable_generation and
-            len(story_text) >= self.min_chars_for_generation
-        )
+
+def resolve_image_urls(serializable_graph: dict) -> dict:
+    """
+    Walk the serialized node-link graph and convert any local image UUID
+    in 'image_url' to its serving URL (/images/{uuid}.png).
+    Leaves full URLs (http/https) untouched.
+    """
+    if not settings.local_image_storage:
+        return serializable_graph
+
+    base_url = f"http://localhost:{settings.api_port}"
+    for node in serializable_graph.get("nodes", []):
+        image_ref = node.get("image_url")
+        if image_ref and not image_ref.startswith("http"):
+            node["image_url"] = f"{base_url}/images/{image_ref}.png"
+
+    return serializable_graph
 
 
 # Global instance for convenience
