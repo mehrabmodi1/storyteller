@@ -10,8 +10,10 @@ import ReactFlow, {
   ReactFlowProvider,
   DefaultEdgeOptions,
   MarkerType,
+  PanOnScrollMode,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
+import { useRowLayout } from '@/hooks/useRowLayout';
 
 import type { TransformedGraph } from '@/utils/graphTransform';
 import type {
@@ -56,14 +58,14 @@ interface GraphCanvasProps {
   onChangePrompt?: (value: string) => void;
   onSubmitPrompt?: (text?: string) => void;
   onCancelEdit?: () => void;
+  mode?: 'tree' | 'row';
+  rowDepth?: number;
+  onRowDepthChange?: (depth: number) => void;
+  transformedGraph?: TransformedGraph | null;
 }
 
-function GraphCanvasInner({
-  graph,
-  onSelectChoice: _onSelectChoice,
-  onSelectStoryNode,
-  onCancelEdit,
-}: GraphCanvasProps) {
+function GraphCanvasInner(props: GraphCanvasProps) {
+  const { graph, onSelectChoice: _onSelectChoice, onSelectStoryNode, onCancelEdit } = props;
   const reactFlowInstance = useReactFlow();
   const prevLatestNodeRef = useRef<string | undefined>();
   const [edgeDiagnostics, setEdgeDiagnostics] = useState({
@@ -71,8 +73,37 @@ function GraphCanvasInner({
     storeCount: 0,
   });
 
-  const nodes = useMemo<StoryReactFlowNode[]>(() => graph?.nodes ?? [], [graph?.nodes]);
-  const edges = useMemo<StoryReactFlowEdge[]>(() => graph?.edges ?? [], [graph?.edges]);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(800);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setContainerWidth(entry.contentRect.width);
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const isRowMode = props.mode === 'row';
+  const rowLayout = useRowLayout(
+    isRowMode ? props.transformedGraph ?? null : null,
+    props.rowDepth ?? 0,
+    containerWidth,
+  );
+
+  const nodes = useMemo<StoryReactFlowNode[]>(() => {
+    if (isRowMode) return rowLayout.nodes;
+    return graph?.nodes ?? [];
+  }, [isRowMode, rowLayout.nodes, graph?.nodes]);
+
+  const edges = useMemo<StoryReactFlowEdge[]>(() => {
+    if (isRowMode) return rowLayout.edges;
+    return graph?.edges ?? [];
+  }, [isRowMode, rowLayout.edges, graph?.edges]);
 
   const handleNodeClick = useCallback(
     (_event: MouseEvent, node: StoryReactFlowNode) => {
@@ -107,6 +138,7 @@ function GraphCanvasInner({
   }, [edges, reactFlowInstance]);
 
   useEffect(() => {
+    if (props.mode === 'row') return;
     if (!graph || !graph.latestStoryNodeId || !nodes.length) {
       return;
     }
@@ -133,8 +165,27 @@ function GraphCanvasInner({
 
   const showEdgeWarning = edgeDiagnostics.propCount > 0 && edgeDiagnostics.storeCount === 0;
 
+  const ROW_CONFIG = GRAPH_VISUAL_CONFIG.rowMode;
+  const ROW_CHOICE_Y = ROW_CONFIG.storyY + GRAPH_VISUAL_CONFIG.storyNode.height + ROW_CONFIG.choiceGap;
+
+  const rowFlowProps = isRowMode
+    ? {
+        translateExtent: [
+          [-Infinity, ROW_CONFIG.storyY - 100],
+          [Infinity, ROW_CHOICE_Y + GRAPH_VISUAL_CONFIG.choiceNode.height + 100],
+        ] as [[number, number], [number, number]],
+        zoomOnScroll: false,
+        zoomOnPinch: false,
+        panOnScroll: true,
+        panOnScrollMode: PanOnScrollMode.Horizontal,
+        fitView: false,
+        minZoom: 1,
+        maxZoom: 1,
+      }
+    : {};
+
   return (
-    <div className="relative h-[720px] rounded-3xl border border-slate-800 overflow-hidden bg-slate-950">
+    <div ref={containerRef} className="relative h-[720px] rounded-3xl border border-slate-800 overflow-hidden bg-slate-950">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -148,16 +199,43 @@ function GraphCanvasInner({
         minZoom={0.1}
         maxZoom={1.8}
         onlyRenderVisibleElements={false}
+        onMove={isRowMode ? (_event, viewport) => rowLayout.onViewportChange(viewport) : undefined}
+        {...rowFlowProps}
       >
         <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#374151" />
-        <MiniMap
-          nodeColor={(node) => (node.type === 'storyNode' ? '#f59e0b' : '#22d3ee')}
-          nodeStrokeWidth={2}
-          zoomable
-          pannable
-        />
+        {!isRowMode && (
+          <MiniMap
+            nodeColor={(node) => (node.type === 'storyNode' ? '#f59e0b' : '#22d3ee')}
+            nodeStrokeWidth={2}
+            zoomable
+            pannable
+          />
+        )}
         <Controls showInteractive={false} />
       </ReactFlow>
+      {isRowMode && (
+        <div className="absolute left-4 top-1/2 -translate-y-1/2 flex flex-col items-center gap-2 z-10">
+          <button
+            type="button"
+            onClick={() => props.onRowDepthChange?.((props.rowDepth ?? 0) + 1)}
+            disabled={(props.rowDepth ?? 0) >= rowLayout.maxDepth}
+            className="bg-slate-800 border border-slate-600 text-slate-300 rounded-lg px-3 py-2 text-sm disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-700"
+          >
+            ▲
+          </button>
+          <div className="bg-slate-700 text-slate-300 text-[10px] text-center px-2 py-1 rounded tracking-wide">
+            {(props.rowDepth ?? 0) === 0 ? 'LEAF' : `LEAF-${props.rowDepth}`}
+          </div>
+          <button
+            type="button"
+            onClick={() => props.onRowDepthChange?.(Math.max(0, (props.rowDepth ?? 0) - 1))}
+            disabled={(props.rowDepth ?? 0) === 0}
+            className="bg-slate-800 border border-slate-600 text-slate-300 rounded-lg px-3 py-2 text-sm disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-700"
+          >
+            ▼
+          </button>
+        </div>
+      )}
       <div className="absolute bottom-3 right-4 text-xs text-white/70 bg-black/40 backdrop-blur px-3 py-1 rounded-full">
         Edges: props {edgeDiagnostics.propCount} · store {edgeDiagnostics.storeCount}
       </div>
