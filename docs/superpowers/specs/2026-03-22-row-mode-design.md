@@ -2,7 +2,7 @@
 
 **Date:** 2026-03-22
 **Branch:** FE-rebuild
-**Status:** Draft
+**Status:** Reviewed (spec review pass 1 — all blocking issues resolved)
 
 ---
 
@@ -49,7 +49,9 @@ Leaf-2 (k=2): S1 (2 hops from S4/S5 via S2)
 
 ### Horizontal ordering
 
-Nodes in a row are ordered by **DFS traversal order** from the root of the story graph. DFS naturally places siblings adjacent and preserves tree topology. No gaps between nodes.
+Nodes in a row are ordered by **DFS pre-order traversal** from the root of the story graph. DFS pre-order naturally places siblings adjacent and preserves tree topology. No gaps between nodes. Nodes encountered multiple times in the DFS are deduplicated on first visit (standard DFS behaviour).
+
+> **Note:** The graph is assumed to be a tree (each story node has at most one story-parent). DAG support is out of scope.
 
 ### Fixed positions
 
@@ -59,7 +61,7 @@ Choice nodes for a given story node are positioned at a fixed y-offset below the
 
 ### Which choice nodes are rendered
 
-Only the choice nodes belonging to the **centered node** and its **immediate left and right neighbours** in the row are included in the ReactFlow nodes array. All other choice nodes are omitted entirely (not hidden — not rendered). This means up to 3 × 3 = 9 choice nodes maximum.
+Only the choice nodes belonging to the **centered node** and its **immediate left and right neighbours** in the row are included in the ReactFlow nodes array. All other choice nodes are omitted entirely (not hidden — not rendered). The visible window is strictly `[center-1, center, center+1]` clamped to the row bounds — no compensation when at the edges (e.g. if centered on the first node, only center and center+1 show choices). Each story node is assumed to have at most 3 choice children (matching the current backend), so the maximum is 3 × 3 = 9 choice nodes.
 
 ### Edges
 
@@ -78,7 +80,7 @@ scale(dist) = 1 / (1 + 0.3 * dist)
 opacity(dist) = 1 / (1 + 0.4 * dist)
 ```
 
-These are applied as inline CSS on the node wrapper:
+These are applied as inline CSS on the **inner card div** (not the outermost `<div className="relative">` that holds the Handles). This ensures ReactFlow's hit-target area (based on the outer div's full dimensions) is not affected by the visual scaling:
 ```css
 transform: scale(<computed>);
 opacity: <computed>;
@@ -95,12 +97,18 @@ The centered node (dist=0) is always scale=1, opacity=1.
 
 ## Center Detection
 
-Uses ReactFlow's `onMove` callback to read the viewport state `{ x, y, zoom }` on every pan:
+Uses ReactFlow's `onMove` callback to read the viewport state `{ x, y, zoom }` on every pan.
+
+**Important:** `useRowLayout` must be called from within `GraphCanvasInner` (inside the `<ReactFlowProvider>` boundary) so that `useReactFlow()` returns a live instance.
+
+**Container width:** Obtain via a `ref` on the graph container div + `ResizeObserver` (or a `useResizeObserver` utility). The container has a responsive width.
+
+**Algorithm:**
 
 1. Compute the flow-coordinate x of the viewport centre: `centerX = (-viewport.x + containerWidth / 2) / viewport.zoom`
 2. Find the story node in the current row whose x-position is closest to `centerX`.
-3. If the centered node ID has changed, recompute `distanceFromCenter` for all row nodes using precomputed pairwise graph distances.
-4. Update each node's `data.distanceFromCenter` — this triggers the scale/opacity CSS transitions.
+3. **Only update React state when the centered node ID changes** — not on every pixel of pan. Store the current centered ID in a `useRef` and only call `setState` when it differs. This prevents re-rendering all nodes on every frame.
+4. When centered node changes: recompute `distanceFromCenter` for all row nodes using precomputed pairwise graph distances. Update each node's `data.distanceFromCenter` — this triggers the scale/opacity CSS transitions.
 
 ---
 
@@ -114,7 +122,16 @@ Uses ReactFlow's `onMove` callback to read the viewport state `{ x, y, zoom }` o
 
 `maxDepth` is the largest k for which any node exists in the leaf-k row.
 
-When depth changes, the row is recomputed and the viewport snaps to center the most recently generated story node (if it exists in the new row), or the first node in the row.
+When depth changes, the row is recomputed and the viewport snaps to center the most recently generated story node (if it exists in the new row), or the first node in the row. Use `reactFlowInstance.setCenter(nodeX, STORY_Y, { zoom: 1, duration: 300 })` for the snap. The vertical component is acceptable because `translateExtent` only constrains user panning, not programmatic viewport changes — and `STORY_Y` is within the allowed extent.
+
+**Depth reference table:**
+
+| `rowDepth` | Label | ▲ | ▼ |
+|---|---|---|---|
+| 0 | LEAF | enabled (if maxDepth > 0) | disabled |
+| 1 | LEAF-1 | enabled (if maxDepth > 1) | enabled |
+| k | LEAF-k | enabled (if k < maxDepth) | enabled |
+| maxDepth | LEAF-{maxDepth} | disabled | enabled |
 
 ---
 
@@ -167,12 +184,14 @@ interface RowLayoutResult {
 }
 
 // Functions
-buildStoryGraph(nodes, edges): StoryAdjacency
+// Input types: StoryReactFlowNode[] and StoryReactFlowEdge[] from TransformedGraph.
+// Use node.data.type ('story' | 'choice') to distinguish node kinds.
+buildStoryGraph(nodes: StoryReactFlowNode[], edges: StoryReactFlowEdge[]): StoryAdjacency
 computeLeafDistances(graph: StoryAdjacency): Map<string, Set<number>>
-getRowNodes(leafDistances, k): string[]
-topologicalOrder(rowNodeIds, graph: StoryAdjacency): string[]
-computeGraphDistances(rowNodeIds, graph: StoryAdjacency): Map<string, Map<string, number>>
-computeRowLayout(allNodes, allEdges, rowDepth): RowLayoutResult
+getRowNodes(leafDistances: Map<string, Set<number>>, k: number): string[]
+dfsOrder(rowNodeIds: string[], graph: StoryAdjacency): string[]  // DFS pre-order, deduplicate on first visit
+computeGraphDistances(rowNodeIds: string[], graph: StoryAdjacency): Map<string, Map<string, number>>
+computeRowLayout(nodes: StoryReactFlowNode[], edges: StoryReactFlowEdge[], rowDepth: number): RowLayoutResult
 ```
 
 ### `src/hooks/useRowLayout.ts`
@@ -236,7 +255,7 @@ Internally:
 - Add `rowDepth` state (`number`, default `0`).
 - Render mode toggle button near the "Graph Visualization" heading.
 - Pass `mode`, `rowDepth`, and depth change handlers to `GraphView`.
-- In row mode, still pass `layoutGraph` (ELK output) as `graph` — `GraphView` will use it to feed `useRowLayout` with the transformed nodes/edges.
+- Pass `transformedGraph` (the output of `transformGraphData`, computed before ELK) to `GraphView` as a new prop. In row mode, `GraphCanvasInner` feeds `transformedGraph` to `useRowLayout`. This avoids any dependency on ELK completing before Row Mode can render. In tree mode, `layoutGraph` (ELK output) is used as before.
 
 ---
 
@@ -247,7 +266,7 @@ Internally:
 | Horizontal pan / scroll | Smoothly shifts the row; centered node updates dynamically. Scale/opacity animate via CSS transitions. |
 | Click a story node | Opens the reading panel (same as tree mode). |
 | Click a choice node | Selects it for editing/submission (same as tree mode). |
-| Submit a choice | Triggers story generation. New story node appears in the leaf row. If currently viewing a non-leaf row, the new node won't appear until the user navigates down. |
+| Submit a choice | Triggers story generation. New story node appears in the leaf row. `rowDepth` stays at its current value — it does NOT auto-reset to 0. If viewing a non-leaf row, the new node won't appear until the user navigates down. |
 | Press ▲ | Increment rowDepth. Row recomputes. Center snaps to most recent node in new row (or first node). |
 | Press ▼ | Decrement rowDepth. Same centering logic. |
 | Toggle Tree ↔ Row | Full layout swap. Row defaults to leaf row. Tree restores ELK layout. |
@@ -264,6 +283,17 @@ Internally:
   - Scroll horizontally → verify centered node scales up, neighbours scale down.
   - Click a choice node in Row Mode → verify story generation works.
   - Toggle back to Tree Mode → verify full tree is restored.
+
+---
+
+## Edge Cases
+
+| Scenario | Behaviour |
+|---|---|
+| **Empty graph** (`null` or zero nodes) | Row Mode renders nothing — same as tree mode. |
+| **Single story node** (root, no children) | Leaf row contains the root. `maxDepth = 0`. Both ▲/▼ disabled. Center snaps to root. |
+| **Placeholder node during streaming** | Placeholder (`isPlaceholder: true`) is treated as a normal story node in row membership and layout. It appears in the leaf row. |
+| **All nodes in a single chain** (no branching) | Each leaf-k row has exactly one node. Scrolling is unnecessary but works. |
 
 ---
 
