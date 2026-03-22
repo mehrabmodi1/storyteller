@@ -38,10 +38,11 @@ export const ChoiceNode: React.FC<NodeProps<ChoiceNodeData>> = ({ id, data, sele
   const ringClass = getRingClass(theme.ring);
 
   const dist = data.distanceFromCenter;
+  const isExplored = data.isExplored ?? false;
   const rowStyle = dist != null
     ? {
         transform: `scale(${1 / (1 + GRAPH_VISUAL_CONFIG.rowMode.scaleFalloff * dist)})`,
-        opacity: 1 / (1 + GRAPH_VISUAL_CONFIG.rowMode.opacityFalloff * dist),
+        opacity: isExplored ? 0.35 : 1 / (1 + GRAPH_VISUAL_CONFIG.rowMode.opacityFalloff * dist),
         transition: 'transform 0.3s ease, opacity 0.3s ease',
       }
     : undefined;
@@ -93,7 +94,7 @@ export const ChoiceNode: React.FC<NodeProps<ChoiceNodeData>> = ({ id, data, sele
         type="button"
         onClick={() => onSelectChoice?.(id)}
         className={`text-left rounded-2xl border ${
-          selected ? `ring-2 ${ringClass} border-transparent shadow-lg shadow-sky-500/30` : 'border-slate-700'
+          selected ? `ring-2 ${ringClass} border-transparent shadow-lg shadow-sky-500/30` : isExplored ? 'border-slate-700/50 border-dashed' : 'border-slate-700'
         } ${background} text-white p-4 flex flex-col gap-3 focus:outline-none transition-all`}
         style={{
           width: GRAPH_VISUAL_CONFIG.choiceNode.width,
@@ -102,7 +103,7 @@ export const ChoiceNode: React.FC<NodeProps<ChoiceNodeData>> = ({ id, data, sele
         }}
       >
         <div className="flex items-center justify-between text-xs uppercase tracking-wide text-white/80">
-          <span>Choice</span>
+          <span>{isExplored ? 'Choice · explored' : 'Choice'}</span>
           {data.persona ? (
             <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${accent} text-white`}>
               {data.persona}

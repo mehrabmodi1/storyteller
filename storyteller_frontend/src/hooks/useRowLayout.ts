@@ -128,6 +128,16 @@ export function useRowLayout(
     const distMap = engineResult.distances.get(centeredNodeId);
 
     const originalNodeMap = new Map(graph.nodes.map((n) => [n.id, n]));
+    // Build set of explored choice IDs (choices with an outgoing edge to a story node)
+    const exploredChoiceIds = new Set<string>();
+    for (const e of graph.edges) {
+      const targetNode = originalNodeMap.get(e.target);
+      const sourceNode = originalNodeMap.get(e.source);
+      if (sourceNode?.data.type === 'choice' && targetNode?.data.type === 'story') {
+        exploredChoiceIds.add(e.source);
+      }
+    }
+
     const resultNodes: StoryReactFlowNode[] = [];
     const resultEdges: StoryReactFlowEdge[] = [];
 
@@ -166,7 +176,11 @@ export function useRowLayout(
           resultNodes.push({
             ...choiceOriginal,
             position: { x: choiceX, y: CHOICE_Y },
-            data: { ...choiceOriginal.data, distanceFromCenter: graphDist },
+            data: {
+              ...choiceOriginal.data,
+              distanceFromCenter: graphDist,
+              isExplored: exploredChoiceIds.has(choiceId),
+            },
           });
 
           resultEdges.push({
