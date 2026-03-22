@@ -19,7 +19,7 @@ export const GRAPH_VISUAL_CONFIG = {
     scaleFalloff: 0.3,
     opacityFalloff: 0.4,
     visibleStoryNodes: 5,
-    visibleChoiceDepth: 1,
+    visibleChoiceDepth: 0,  // center only shows choices
   },
 };
 

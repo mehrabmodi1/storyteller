@@ -20,8 +20,16 @@ export function useRowLayout(
   graph: TransformedGraph | null,
   rowDepth: number,
   containerWidth: number,
+  containerHeight: number,
 ): UseRowLayoutResult {
   const reactFlow = useReactFlow();
+
+  // Compute zoom that fits story node + choice nodes + padding vertically
+  const CONTENT_TOP = ROW.storyY;
+  const CONTENT_BOTTOM = CHOICE_Y + GRAPH_VISUAL_CONFIG.choiceNode.height;
+  const VERTICAL_PADDING = 60;
+  const contentHeight = CONTENT_BOTTOM - CONTENT_TOP + VERTICAL_PADDING * 2;
+  const autoZoom = Math.min(1, containerHeight / contentHeight);
 
   // Compute row layout from engine
   const engineResult = useMemo(() => {
@@ -61,8 +69,10 @@ export function useRowLayout(
 
     const pos = storyPositions.get(initialCenteredId);
     if (pos) {
+      const centerY = (CONTENT_TOP + CONTENT_BOTTOM) / 2;
+      const centerX = pos.x + GRAPH_VISUAL_CONFIG.storyNode.width / 2;
       requestAnimationFrame(() => {
-        reactFlow.setCenter(pos.x, ROW.storyY, { zoom: 1, duration: 300 });
+        reactFlow.setCenter(centerX, centerY, { zoom: autoZoom, duration: 300 });
       });
     }
   }, [initialCenteredId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -111,10 +121,8 @@ export function useRowLayout(
     const visibleEnd = Math.min(orderedIds.length - 1, centerIdx + 2);
     const visibleStoryIds = orderedIds.slice(visibleStart, visibleEnd + 1);
 
-    // Choice window: center ± 1 (3 nodes show choices)
-    const choiceStart = Math.max(0, centerIdx - 1);
-    const choiceEnd = Math.min(orderedIds.length - 1, centerIdx + 1);
-    const choiceStoryIds = new Set(orderedIds.slice(choiceStart, choiceEnd + 1));
+    // Choice window: center only
+    const choiceStoryIds = new Set([centeredNodeId]);
 
     // Distances from centered node
     const distMap = engineResult.distances.get(centeredNodeId);

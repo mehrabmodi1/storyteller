@@ -75,6 +75,7 @@ function GraphCanvasInner(props: GraphCanvasProps) {
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(800);
+  const [containerHeight, setContainerHeight] = useState(600);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -82,6 +83,7 @@ function GraphCanvasInner(props: GraphCanvasProps) {
     const ro = new ResizeObserver((entries) => {
       for (const entry of entries) {
         setContainerWidth(entry.contentRect.width);
+        setContainerHeight(entry.contentRect.height);
       }
     });
     ro.observe(el);
@@ -93,6 +95,7 @@ function GraphCanvasInner(props: GraphCanvasProps) {
     isRowMode ? props.transformedGraph ?? null : null,
     props.rowDepth ?? 0,
     containerWidth,
+    containerHeight,
   );
 
   const nodes = useMemo<StoryReactFlowNode[]>(() => {
@@ -188,27 +191,20 @@ function GraphCanvasInner(props: GraphCanvasProps) {
 
   const showEdgeWarning = edgeDiagnostics.propCount > 0 && edgeDiagnostics.storeCount === 0;
 
-  const ROW_CONFIG = GRAPH_VISUAL_CONFIG.rowMode;
-  const ROW_CHOICE_Y = ROW_CONFIG.storyY + GRAPH_VISUAL_CONFIG.storyNode.height + ROW_CONFIG.choiceGap;
-
   const rowFlowProps = isRowMode
     ? {
-        translateExtent: [
-          [-Infinity, ROW_CONFIG.storyY - 100],
-          [Infinity, ROW_CHOICE_Y + GRAPH_VISUAL_CONFIG.choiceNode.height + 100],
-        ] as [[number, number], [number, number]],
         zoomOnScroll: false,
         zoomOnPinch: false,
         panOnScroll: true,
         panOnScrollMode: PanOnScrollMode.Horizontal,
         fitView: false,
-        minZoom: 1,
+        minZoom: 0.3,
         maxZoom: 1,
       }
     : {};
 
   return (
-    <div ref={containerRef} className="relative h-[720px] rounded-3xl border border-slate-800 overflow-hidden bg-slate-950">
+    <div ref={containerRef} className="relative h-[calc(100vh-280px)] min-h-[400px] rounded-3xl border border-slate-800 overflow-hidden bg-slate-950">
       <ReactFlow
         nodes={nodesWithChoiceProps}
         edges={edges}
@@ -216,11 +212,11 @@ function GraphCanvasInner(props: GraphCanvasProps) {
         onNodeClick={handleNodeClick}
         onPaneClick={handlePaneClick}
         defaultEdgeOptions={defaultEdgeOptions}
-        fitView
+        fitView={!isRowMode}
         fitViewOptions={fitViewOptions}
         proOptions={{ hideAttribution: true }}
-        minZoom={0.1}
-        maxZoom={1.8}
+        minZoom={isRowMode ? 0.3 : 0.1}
+        maxZoom={isRowMode ? 1 : 1.8}
         onlyRenderVisibleElements={false}
         onMove={isRowMode ? (_event, viewport) => rowLayout.onViewportChange(viewport) : undefined}
         {...rowFlowProps}
