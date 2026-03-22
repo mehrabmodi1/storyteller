@@ -3,6 +3,7 @@ import {
   buildStoryGraph,
   computeLeafDistances,
   getRowNodes,
+  dfsOrder,
 } from '../rowLayoutEngine';
 import type { StoryReactFlowNode, StoryReactFlowEdge } from '@/types/graph.types';
 
@@ -138,5 +139,33 @@ describe('getRowNodes', () => {
     const graph = buildStoryGraph(nodes, edges);
     const ld = computeLeafDistances(graph);
     expect(getRowNodes(ld, 3)).toEqual([]);
+  });
+});
+
+// ── Task 4: dfsOrder ──────────────────────────────────────────────────────────
+
+describe('dfsOrder', () => {
+  it('leaf row visits S4, S5, then S3 (DFS pre-order)', () => {
+    const graph = buildStoryGraph(nodes, edges);
+    const ld = computeLeafDistances(graph);
+    const rowNodes = getRowNodes(ld, 0);
+    expect(dfsOrder(rowNodes, graph)).toEqual(['S4', 'S5', 'S3']);
+  });
+
+  it('leaf-1 row visits S1, S2', () => {
+    const graph = buildStoryGraph(nodes, edges);
+    const ld = computeLeafDistances(graph);
+    const rowNodes = getRowNodes(ld, 1);
+    expect(dfsOrder(rowNodes, graph)).toEqual(['S1', 'S2']);
+  });
+
+  it('single node returns that node', () => {
+    const graph = buildStoryGraph([storyNode('S1')], []);
+    expect(dfsOrder(['S1'], graph)).toEqual(['S1']);
+  });
+
+  it('empty set returns empty', () => {
+    const graph = buildStoryGraph(nodes, edges);
+    expect(dfsOrder([], graph)).toEqual([]);
   });
 });

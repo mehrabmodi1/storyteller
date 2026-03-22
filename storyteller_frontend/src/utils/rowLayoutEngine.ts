@@ -134,3 +134,39 @@ export function getRowNodes(
   }
   return result;
 }
+
+// ── Task 4: dfsOrder ──────────────────────────────────────────────────────────
+
+/**
+ * Returns the subset of rowNodeIds in DFS pre-order starting from the graph roots.
+ * Only emits nodes that appear in rowNodeIds; duplicates are suppressed.
+ */
+export function dfsOrder(
+  rowNodeIds: string[],
+  graph: StoryAdjacency,
+): string[] {
+  if (rowNodeIds.length === 0) return [];
+
+  const rowSet = new Set(rowNodeIds);
+  const visited = new Set<string>();
+  const order: string[] = [];
+
+  function dfs(nodeId: string): void {
+    if (visited.has(nodeId)) return;
+    visited.add(nodeId);
+
+    if (rowSet.has(nodeId)) {
+      order.push(nodeId);
+    }
+
+    for (const childId of graph.children.get(nodeId) ?? []) {
+      dfs(childId);
+    }
+  }
+
+  for (const root of graph.roots) {
+    dfs(root);
+  }
+
+  return order;
+}
