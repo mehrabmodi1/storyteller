@@ -170,3 +170,86 @@ export function dfsOrder(
 
   return order;
 }
+
+// ── Task 5: computeGraphDistances + computeRowLayout ─────────────────────────
+
+/**
+ * BFS through the undirected story graph from each row node.
+ * Returns pairwise distances between row nodes only.
+ */
+export function computeGraphDistances(
+  rowNodeIds: string[],
+  graph: StoryAdjacency,
+): Map<string, Map<string, number>> {
+  const rowSet = new Set(rowNodeIds);
+
+  // Build undirected adjacency from the directed children map
+  const undirected = new Map<string, string[]>();
+  for (const [nodeId, childIds] of graph.children) {
+    if (!undirected.has(nodeId)) undirected.set(nodeId, []);
+    for (const childId of childIds) {
+      undirected.get(nodeId)!.push(childId);
+      if (!undirected.has(childId)) undirected.set(childId, []);
+      undirected.get(childId)!.push(nodeId);
+    }
+  }
+
+  const result = new Map<string, Map<string, number>>();
+
+  for (const startId of rowNodeIds) {
+    const distMap = new Map<string, number>();
+    result.set(startId, distMap);
+
+    // BFS from startId through the undirected graph
+    const visited = new Map<string, number>();
+    visited.set(startId, 0);
+    const queue: string[] = [startId];
+
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      const currentDist = visited.get(current)!;
+
+      for (const neighbour of undirected.get(current) ?? []) {
+        if (!visited.has(neighbour)) {
+          visited.set(neighbour, currentDist + 1);
+          queue.push(neighbour);
+        }
+      }
+    }
+
+    // Record distances to row nodes only
+    for (const [nodeId, d] of visited) {
+      if (rowSet.has(nodeId)) {
+        distMap.set(nodeId, d);
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Orchestrates the full row layout for a given depth in the story graph.
+ *
+ * @param graph  Pre-built StoryAdjacency (output of buildStoryGraph)
+ * @param depth  Row depth where 0 = leaf row, 1 = leaf-1 row, etc.
+ */
+export function computeRowLayout(
+  graph: StoryAdjacency,
+  depth: number,
+): RowLayout {
+  const leafDistances = computeLeafDistances(graph);
+
+  let maxDepth = 0;
+  for (const distances of leafDistances.values()) {
+    for (const d of distances) {
+      if (d > maxDepth) maxDepth = d;
+    }
+  }
+
+  const rowNodeIds = getRowNodes(leafDistances, depth);
+  const orderedNodeIds = dfsOrder(rowNodeIds, graph);
+  const distances = computeGraphDistances(orderedNodeIds, graph);
+
+  return { orderedNodeIds, distances, maxDepth };
+}

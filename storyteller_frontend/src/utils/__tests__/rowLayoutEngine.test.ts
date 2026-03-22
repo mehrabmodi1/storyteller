@@ -4,6 +4,8 @@ import {
   computeLeafDistances,
   getRowNodes,
   dfsOrder,
+  computeGraphDistances,
+  computeRowLayout,
 } from '../rowLayoutEngine';
 import type { StoryReactFlowNode, StoryReactFlowEdge } from '@/types/graph.types';
 
@@ -167,5 +169,65 @@ describe('dfsOrder', () => {
   it('empty set returns empty', () => {
     const graph = buildStoryGraph(nodes, edges);
     expect(dfsOrder([], graph)).toEqual([]);
+  });
+});
+
+// ── Task 5: computeGraphDistances + computeRowLayout ─────────────────────────
+
+describe('computeGraphDistances', () => {
+  it('S4 to S5 distance is 2', () => {
+    const graph = buildStoryGraph(nodes, edges);
+    const ld = computeLeafDistances(graph);
+    const rowNodes = getRowNodes(ld, 0);
+    const distances = computeGraphDistances(rowNodes, graph);
+    expect(distances.get('S4')?.get('S5')).toBe(2);
+    expect(distances.get('S5')?.get('S4')).toBe(2);
+  });
+
+  it('S4 to S3 distance is 3', () => {
+    const graph = buildStoryGraph(nodes, edges);
+    const ld = computeLeafDistances(graph);
+    const rowNodes = getRowNodes(ld, 0);
+    const distances = computeGraphDistances(rowNodes, graph);
+    expect(distances.get('S4')?.get('S3')).toBe(3);
+    expect(distances.get('S3')?.get('S4')).toBe(3);
+  });
+
+  it('S3 to S5 distance is 3', () => {
+    const graph = buildStoryGraph(nodes, edges);
+    const ld = computeLeafDistances(graph);
+    const rowNodes = getRowNodes(ld, 0);
+    const distances = computeGraphDistances(rowNodes, graph);
+    expect(distances.get('S3')?.get('S5')).toBe(3);
+  });
+
+  it('self-distance is 0', () => {
+    const graph = buildStoryGraph(nodes, edges);
+    const ld = computeLeafDistances(graph);
+    const rowNodes = getRowNodes(ld, 0);
+    const distances = computeGraphDistances(rowNodes, graph);
+    expect(distances.get('S4')?.get('S4')).toBe(0);
+  });
+});
+
+describe('computeRowLayout', () => {
+  it('depth=0 returns leaves in DFS order with correct distances and maxDepth=2', () => {
+    const graph = buildStoryGraph(nodes, edges);
+    const result = computeRowLayout(graph, 0);
+    expect(result.orderedNodeIds).toEqual(['S4', 'S5', 'S3']);
+    expect(result.maxDepth).toBe(2);
+    expect(result.distances.get('S4')?.get('S5')).toBe(2);
+  });
+
+  it('depth=1 returns S1, S2 in DFS order', () => {
+    const graph = buildStoryGraph(nodes, edges);
+    const result = computeRowLayout(graph, 1);
+    expect(result.orderedNodeIds).toEqual(['S1', 'S2']);
+  });
+
+  it('depth beyond max returns empty', () => {
+    const graph = buildStoryGraph(nodes, edges);
+    const result = computeRowLayout(graph, 5);
+    expect(result.orderedNodeIds).toEqual([]);
   });
 });
