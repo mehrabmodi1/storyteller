@@ -105,6 +105,29 @@ function GraphCanvasInner(props: GraphCanvasProps) {
     return graph?.edges ?? [];
   }, [isRowMode, rowLayout.edges, graph?.edges]);
 
+  // Inject choiceProps into choice nodes — needed for both tree and row mode
+  const nodesWithChoiceProps = useMemo<StoryReactFlowNode[]>(() => {
+    if (!nodes.length) return nodes;
+    return nodes.map((node) => {
+      if (node.type !== 'choiceNode') return node;
+      const isActive = node.id === props.activeChoiceId;
+      return {
+        ...node,
+        data: {
+          ...node.data,
+          choiceProps: {
+            isActive,
+            editablePrompt: props.editablePrompt,
+            onChangePrompt: props.onChangePrompt,
+            onSubmitPrompt: props.onSubmitPrompt,
+            onCancel: props.onCancelEdit,
+            onSelectChoice: props.onSelectChoice,
+          },
+        },
+      } as StoryReactFlowNode;
+    });
+  }, [nodes, props.activeChoiceId, props.editablePrompt, props.onChangePrompt, props.onSubmitPrompt, props.onCancelEdit, props.onSelectChoice]);
+
   const handleNodeClick = useCallback(
     (_event: MouseEvent, node: StoryReactFlowNode) => {
       if (node.type === 'storyNode') {
@@ -187,7 +210,7 @@ function GraphCanvasInner(props: GraphCanvasProps) {
   return (
     <div ref={containerRef} className="relative h-[720px] rounded-3xl border border-slate-800 overflow-hidden bg-slate-950">
       <ReactFlow
-        nodes={nodes}
+        nodes={nodesWithChoiceProps}
         edges={edges}
         nodeTypes={nodeTypes}
         onNodeClick={handleNodeClick}
