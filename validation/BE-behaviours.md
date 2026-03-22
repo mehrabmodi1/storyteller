@@ -241,7 +241,51 @@ is less than 50% (excluding common stop words). Check for persona-
 indicative markers: Grandmother output should use warm, oral-tradition
 language; HAL 9000 should use analytical or detached language.
 
-### BE-24. Story generation works without persona
+### BE-24. Choice node suggestions reflect persona voice
+depends_on: BE-1
+
+Generate two stories with the same prompt and corpus but different personas,
+and compare the tone of the **choice nodes** (not the story text) between them:
+
+1. `GET /api/stream_story?prompt=Tell me about the Pandavas&new_journey=true&corpus_name=mahabharata&persona_name=Grandmother&username=agent-tester&paragraph_count=4`
+2. `GET /api/stream_story?prompt=Tell me about the Pandavas&new_journey=true&corpus_name=mahabharata&persona_name=HAL 9000&username=agent-tester&paragraph_count=4`
+
+From each response's graph data, extract the `label` or `text` field of
+every choice node.
+
+**Evaluate the Grandmother choice nodes:**
+- Language should be warm, inviting, and narrative — as if an elder is
+  beckoning the listener toward the next part of the tale. Examples of
+  passing tone: "Follow young Arjuna as he faces his greatest test of
+  courage…", "Hear how the dice game shattered the peace the Pandavas
+  had built…"
+- Language should NOT be dry, encyclopaedic, or menu-like. Examples of
+  failing tone: "Explore Arjuna's decision", "Learn about the dice game",
+  "Continue to the next chapter"
+
+**Evaluate the HAL 9000 choice nodes:**
+- Language should be analytical, measured, or subtly ominous — consistent
+  with HAL's persona. Examples of passing tone: "Assess the tactical
+  implications of Arjuna's hesitation…", "Examine the probability of
+  Pandava success given the dice game outcome…"
+- Should NOT read the same as Grandmother's choices.
+
+**Pass criteria:**
+- Grandmother choice nodes read as oral-tradition storytelling invitations
+- HAL 9000 choice nodes read in a distinctly different, analytical register
+- Neither set reads as generic, menu-style options
+- Word overlap between the two sets of choice nodes is below 40%
+  (excluding stop words)
+
+If all choice nodes from both personas read in the same dry, generic style,
+this is a FAIL — the persona is being applied to the story body only, not
+to the choice node generation prompt.
+
+Note: implementation requires passing the persona's voice/tone instructions
+into the choice node generation step of the LangGraph pipeline, not just
+into the story generation step.
+
+### BE-25. Story generation works without persona
 depends_on: BE-1
 
 `GET /api/stream_story?prompt=Tell me about the Pandavas&new_journey=true&corpus_name=mahabharata&username=agent-tester&paragraph_count=4`
@@ -253,19 +297,19 @@ should fall back to the base system prompt without error.
 
 ## H. Edge Cases & Error Handling
 
-### BE-25. Empty prompt rejected
+### BE-26. Empty prompt rejected
 depends_on: none
 
 `GET /api/stream_story?prompt=&new_journey=true&corpus_name=mahabharata&username=agent-tester&paragraph_count=4`
 
 Expect a 422 validation error. No stream should start.
 
-### BE-26. Prompt exceeding max length rejected
+### BE-27. Prompt exceeding max length rejected
 depends_on: none
 
 Send a prompt exceeding 500 characters. Expect a 422 validation error.
 
-### BE-27. Invalid choice_id returns sync error
+### BE-28. Invalid choice_id returns sync error
 depends_on: none
 
 `GET /api/stream_story?prompt=continue&choice_id=nonexistent_id&corpus_name=mahabharata&username=agent-tester&paragraph_count=4`
@@ -273,7 +317,7 @@ depends_on: none
 Expect an error event in the SSE stream indicating client and server
 are out of sync.
 
-### BE-28. Concurrent requests for same user
+### BE-29. Concurrent requests for same user
 depends_on: BE-1
 
 Fire two `stream_story` requests simultaneously for the same user with
@@ -282,14 +326,14 @@ state — the async lock in GraphState should serialize graph mutations.
 After both complete, verify: node counts match expected values, no nodes
 are orphaned, and all edges connect existing nodes.
 
-### BE-29. Reject paragraph_count below minimum
+### BE-30. Reject paragraph_count below minimum
 depends_on: none
 
 `GET /api/stream_story?prompt=test&new_journey=true&corpus_name=mahabharata&username=agent-tester&paragraph_count=0`
 
 Expect a 422 validation error. Also test with `paragraph_count=-1`.
 
-### BE-30. Guardrail applies on continuation (choice_id path)
+### BE-31. Guardrail applies on continuation (choice_id path)
 depends_on: BE-4
 
 From BE-4's response, extract a `choice_id`. Attempt to continue with
@@ -301,14 +345,14 @@ Expect the `guardrail_reject` event with the redirect message. No new
 story node should be added to the graph. Verify the graph is unchanged
 from its state before this request.
 
-### BE-31. Rejected prompt creates no graph nodes
+### BE-32. Rejected prompt creates no graph nodes
 depends_on: BE-13
 
 After BE-13's rejection, load the journey graph. Verify that no new
 story or choice nodes were added as a result of the rejected prompt.
 The graph should be unchanged from its state before the rejected request.
 
-### BE-32. Default paragraph_count when not provided
+### BE-33. Default paragraph_count when not provided
 depends_on: BE-1
 
 `GET /api/stream_story?prompt=Tell me about the Pandavas&new_journey=true&corpus_name=mahabharata&username=agent-tester`

@@ -93,14 +93,18 @@ export function useRowLayout(
     (viewport: Viewport) => {
       if (!engineResult || !engineResult.orderedNodeIds.length) return;
 
-      // Lock y-axis: if viewport.y drifted, snap it back
-      const expectedY = lockedYRef.current;
-      if (Math.abs(viewport.y - expectedY) > 1) {
-        reactFlow.setViewport({ x: viewport.x, y: expectedY, zoom: autoZoom }, { duration: 0 });
+      // Skip all corrections during manual centering animation
+      const isAnimating = Date.now() < manualCenterUntilRef.current;
+
+      // Lock y-axis: if viewport.y drifted, snap it back (but not during centering animation)
+      if (!isAnimating) {
+        const expectedY = lockedYRef.current;
+        if (Math.abs(viewport.y - expectedY) > 1) {
+          reactFlow.setViewport({ x: viewport.x, y: expectedY, zoom: autoZoom }, { duration: 0 });
+        }
       }
 
-      // Skip auto-detection during manual centering animation
-      if (Date.now() < manualCenterUntilRef.current) return;
+      if (isAnimating) return;
 
       const centerX = (-viewport.x + containerWidth / 2) / viewport.zoom;
       let closestId = engineResult.orderedNodeIds[0];
