@@ -58,6 +58,7 @@ export interface ReactFlowNodeData {
   persona?: string | null;
   theme?: ColorTheme;
   isPlaceholder?: boolean;
+  distanceFromCenter?: number;
 }
 
 export type StoryReactFlowNode = Node<ReactFlowNodeData>;
