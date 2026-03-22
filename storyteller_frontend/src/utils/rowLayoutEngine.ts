@@ -78,3 +78,59 @@ export function buildStoryGraph(
 
   return { children, parents, roots };
 }
+
+// ── Task 3: computeLeafDistances + getRowNodes ────────────────────────────────
+
+/**
+ * For each story node, computes the set of hop-distances to descendant leaves.
+ * Leaves (nodes with no children) have distance 0 to themselves.
+ * A node's distances are { childDistance + 1 for each child's distance }.
+ */
+export function computeLeafDistances(
+  graph: StoryAdjacency,
+): Map<string, Set<number>> {
+  const result = new Map<string, Set<number>>();
+
+  function dfs(nodeId: string): Set<number> {
+    if (result.has(nodeId)) return result.get(nodeId)!;
+
+    const childIds = graph.children.get(nodeId) ?? [];
+    if (childIds.length === 0) {
+      const s = new Set<number>([0]);
+      result.set(nodeId, s);
+      return s;
+    }
+
+    const distances = new Set<number>();
+    for (const childId of childIds) {
+      const childDistances = dfs(childId);
+      for (const d of childDistances) {
+        distances.add(d + 1);
+      }
+    }
+    result.set(nodeId, distances);
+    return distances;
+  }
+
+  for (const root of graph.roots) {
+    dfs(root);
+  }
+
+  return result;
+}
+
+/**
+ * Returns the ids of nodes whose leaf-distance set contains k.
+ */
+export function getRowNodes(
+  leafDistances: Map<string, Set<number>>,
+  k: number,
+): string[] {
+  const result: string[] = [];
+  for (const [nodeId, distances] of leafDistances) {
+    if (distances.has(k)) {
+      result.push(nodeId);
+    }
+  }
+  return result;
+}
