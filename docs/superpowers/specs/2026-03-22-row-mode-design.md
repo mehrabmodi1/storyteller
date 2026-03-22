@@ -61,7 +61,11 @@ Choice nodes for a given story node are positioned at a fixed y-offset below the
 
 ### Which choice nodes are rendered
 
-Only the choice nodes belonging to the **centered node** and its **immediate left and right neighbours** in the row are included in the ReactFlow nodes array. All other choice nodes are omitted entirely (not hidden — not rendered). The visible window is strictly `[center-1, center, center+1]` clamped to the row bounds — no compensation when at the edges (e.g. if centered on the first node, only center and center+1 show choices). Each story node is assumed to have at most 3 choice children (matching the current backend), so the maximum is 3 × 3 = 9 choice nodes.
+**Visible story nodes:** The viewport shows **5 story nodes** at a time: the centered node and its 2 nearest neighbours on each side (`[center-2, center-1, center, center+1, center+2]`), clamped to row bounds. Story nodes beyond this window are not rendered.
+
+**Visible choice nodes:** Only the choice nodes belonging to the **centered node and its immediate left and right neighbours** (`[center-1, center, center+1]`) are included. Choice nodes for center±2 are omitted. Each story node has at most 3 choice children (matching the current backend), so the maximum is 3 × 3 = 9 choice nodes.
+
+No compensation at row edges — if centered on the first node, only center, center+1, and center+2 story nodes are visible, and only center and center+1 show choices.
 
 ### Edges
 
@@ -91,7 +95,7 @@ The constants (0.3, 0.4) are tunable and defined in `graph.config.ts`.
 
 Choice nodes inherit their parent story node's scale and opacity.
 
-The centered node (dist=0) is always scale=1, opacity=1.
+The centered node (dist=0) is always scale=1, opacity=1. The outermost visible nodes (center±2) are the most faded/scaled; nodes beyond center±2 are not rendered at all.
 
 ---
 

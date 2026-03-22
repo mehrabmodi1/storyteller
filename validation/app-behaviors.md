@@ -366,3 +366,89 @@ graph metadata should store image path references (e.g.
 fetch and render them. This separation allows stale images to be cleaned
 up independently without modifying graph data. The frontend story nodes
 need to render these images using the paths from the graph.
+
+---
+
+## Row Mode Tests
+
+## 33. Toggle to Row Mode and verify leaf row
+depends_on: 16
+status: unimplemented
+
+After the graph has at least 3 story nodes across 2 branches (from
+test 16), find and click the mode toggle button to switch from Tree Mode
+to Row Mode.
+
+Expect the graph to transform into a horizontal row of story nodes. Take
+a screenshot and verify:
+- Only **leaf story nodes** are displayed in the row (nodes at the
+  frontier of each branch — no intermediate nodes).
+- Up to **5 story nodes** are visible at once.
+- The **centered node** is rendered largest and at full opacity.
+- Nodes to the left and right of center are progressively smaller and
+  more transparent.
+- A **depth label** reading "LEAF" is visible on the left side of the
+  graph, with ▲/▼ arrow buttons.
+- **Choice nodes** are visible below the centered node and its immediate
+  left/right neighbours (up to 9 choice nodes total).
+- No story-to-story edges are visible; only story-to-choice edges.
+
+## 34. Press ▲ to navigate to Leaf-1 depth
+depends_on: 33
+status: unimplemented
+
+Click the ▲ button. Expect the depth label to change to "LEAF-1". The
+row should now show story nodes that are exactly 1 hop above at least
+one leaf node.
+
+Take a screenshot and verify:
+- The nodes in the row are different from the leaf row (they are parents
+  of leaf nodes, not leaves themselves).
+- The scale/opacity effect still applies — centered node is largest.
+- Choice nodes are visible below the center ± 1 story nodes.
+
+If the graph only has 2 depth levels, ▲ should now be disabled
+(greyed out) since there are no deeper ancestor rows.
+
+## 35. Press ▼ to return to leaf row
+depends_on: 34
+status: unimplemented
+
+Click the ▼ button. Expect the depth label to return to "LEAF" and the
+row to show the same leaf nodes as in test 33. ▼ should now be disabled.
+
+## 36. Scroll horizontally to re-center a different node
+depends_on: 33
+status: unimplemented
+
+In the leaf row, pan/scroll the graph horizontally to shift the
+viewport so a different story node becomes centered. Take a screenshot
+and verify:
+- The newly centered node is rendered at full scale and opacity.
+- The previously centered node has scaled down and faded.
+- Choice nodes have updated — only the new center ± 1 story nodes
+  show their choices.
+
+## 37. Click a choice node in Row Mode and generate a story
+depends_on: 33
+status: unimplemented
+
+Click a choice node below one of the visible story nodes to expand it.
+Edit the prompt if desired and click "Continue Journey". Wait for the
+stream to complete (up to 60 seconds).
+
+Verify:
+- A new story node appears in the leaf row (since it is now a leaf).
+- The row updates to include the new node.
+- The reading panel shows the new story content.
+
+## 38. Toggle back to Tree Mode
+depends_on: 37
+status: unimplemented
+
+Click the mode toggle to switch back to Tree Mode. Take a screenshot
+and verify:
+- The full tree graph is restored with all story and choice nodes.
+- All edges (story-to-choice and choice-to-story) are visible.
+- The ELK layout arranges nodes hierarchically as before.
+- The new story node generated in test 37 is present in the tree.
