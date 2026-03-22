@@ -30,6 +30,8 @@ function AppContent() {
   const [viewingStoryText, setViewingStoryText] = useState<string | null>(null);
   const [currentGraphId, setCurrentGraphId] = useState<string | null>(null);
   const [paragraphCount, setParagraphCount] = useState(4);
+  const [graphMode, setGraphMode] = useState<'tree' | 'row'>('tree');
+  const [rowDepth, setRowDepth] = useState(0);
   const pendingPlaceholderIdRef = useRef<string | null>(null);
   const { graphData: streamingGraph, isStreaming, error: streamError, closeStream, streamingText, guardrailMessage } = useSSE(streamUrl);
 
@@ -206,6 +208,14 @@ function AppContent() {
     }
   };
 
+  const handleToggleMode = () => {
+    setGraphMode((prev) => {
+      const next = prev === 'tree' ? 'row' : 'tree';
+      if (next === 'row') setRowDepth(0);
+      return next;
+    });
+  };
+
   return (
     <div
       className={`min-h-screen transition-colors ${
@@ -297,9 +307,22 @@ function AppContent() {
         </div>
 
         <div className="space-y-4">
-          <h2 className="text-3xl font-semibold">Graph Visualization</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-3xl font-semibold">Graph Visualization</h2>
+            <button
+              type="button"
+              onClick={handleToggleMode}
+              className="px-4 py-2 rounded-lg text-sm font-medium bg-slate-800 border border-slate-600 text-slate-300 hover:bg-slate-700 transition"
+            >
+              {graphMode === 'tree' ? '⬌ Row Mode' : '🌳 Tree Mode'}
+            </button>
+          </div>
           <GraphView
             graph={layoutGraph}
+            transformedGraph={transformedGraph}
+            mode={graphMode}
+            rowDepth={rowDepth}
+            onRowDepthChange={setRowDepth}
             onSelectChoice={handleSelectChoice}
             onSelectStoryNode={handleSelectStoryNode}
             activeChoiceId={activeChoiceId}
