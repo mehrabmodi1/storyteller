@@ -417,33 +417,34 @@ status: unimplemented
 Click the ▼ button. Expect the depth label to return to "LEAF" and the
 row to show the same leaf nodes as in test 33. ▼ should now be disabled.
 
-## 36. Scroll horizontally to re-center a different node
-depends_on: 33
+## 36. Click a choice node in Row Mode and generate a story
+depends_on: 35
 status: unimplemented
 
-In the leaf row, pan/scroll the graph horizontally to shift the
-viewport so a different story node becomes centered. Take a screenshot
-and verify:
+In the leaf row (returned to in test 35), click a choice node below one
+of the visible story nodes to expand it. Click "Continue Journey". Wait
+for the stream to complete (up to 60 seconds).
+
+Verify:
+- A new story node appears in the leaf row (since it is now a leaf).
+- The leaf row now has **3 leaf nodes** (the 2 original leaves plus the
+  new one).
+- The reading panel shows the new story content.
+
+## 37. Scroll horizontally to re-center a different node
+depends_on: 36
+status: unimplemented
+
+With 3 leaf nodes now in the row (from test 36), pan/scroll the graph
+horizontally to shift the viewport so a different story node becomes
+centered. Take a screenshot and verify:
 - The newly centered node is rendered at full scale and opacity.
 - The previously centered node has scaled down and faded.
 - Choice nodes have updated — only the new center ± 1 story nodes
   show their choices.
 
-## 37. Click a choice node in Row Mode and generate a story
-depends_on: 33
-status: unimplemented
-
-Click a choice node below one of the visible story nodes to expand it.
-Edit the prompt if desired and click "Continue Journey". Wait for the
-stream to complete (up to 60 seconds).
-
-Verify:
-- A new story node appears in the leaf row (since it is now a leaf).
-- The row updates to include the new node.
-- The reading panel shows the new story content.
-
 ## 38. Toggle back to Tree Mode
-depends_on: 37
+depends_on: 36
 status: unimplemented
 
 Click the mode toggle to switch back to Tree Mode. Take a screenshot
