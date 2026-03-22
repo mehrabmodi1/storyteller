@@ -139,6 +139,17 @@ function AppContent() {
   }, [streamError]);
 
   const handleSelectChoice = (nodeId: string) => {
+    // If this choice has been explored (has a child story node), open that story's read panel instead
+    if (rawGraph) {
+      const childEdge = rawGraph.links.find((l) => l.source === nodeId);
+      if (childEdge) {
+        const childStory = rawGraph.nodes.find((n) => n.id === childEdge.target && n.type === 'story');
+        if (childStory) {
+          handleSelectStoryNode(childStory.id);
+          return;
+        }
+      }
+    }
     setActiveChoiceId(nodeId);
     const choiceNode = rawGraph?.nodes.find((n) => n.id === nodeId);
     setActiveChoicePrompt(choiceNode?.label ?? '');

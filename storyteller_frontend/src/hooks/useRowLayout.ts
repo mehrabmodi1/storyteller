@@ -14,6 +14,7 @@ export interface UseRowLayoutResult {
   maxDepth: number;
   centeredNodeId: string | null;
   onViewportChange: (viewport: Viewport) => void;
+  centerOnNode: (nodeId: string) => void;
 }
 
 export function useRowLayout(
@@ -77,10 +78,25 @@ export function useRowLayout(
     }
   }, [initialCenteredId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Viewport change handler — detect new centered node
+  // Compute the fixed y viewport position for row mode
+  const fixedViewportY = useMemo(() => {
+    const centerY = (CONTENT_TOP + CONTENT_BOTTOM) / 2;
+    return -(centerY * autoZoom - containerHeight / 2);
+  }, [autoZoom, containerHeight]);
+
+  const lockedYRef = useRef(fixedViewportY);
+  lockedYRef.current = fixedViewportY;
+
+  // Viewport change handler — detect new centered node + lock y-axis
   const onViewportChange = useCallback(
     (viewport: Viewport) => {
       if (!engineResult || !engineResult.orderedNodeIds.length) return;
+
+      // Lock y-axis: if viewport.y drifted, snap it back
+      const expectedY = lockedYRef.current;
+      if (Math.abs(viewport.y - expectedY) > 1) {
+        reactFlow.setViewport({ x: viewport.x, y: expectedY, zoom: autoZoom }, { duration: 0 });
+      }
 
       const centerX = (-viewport.x + containerWidth / 2) / viewport.zoom;
       let closestId = engineResult.orderedNodeIds[0];
@@ -101,7 +117,21 @@ export function useRowLayout(
         setCenteredNodeId(closestId);
       }
     },
-    [engineResult, storyPositions, containerWidth],
+    [engineResult, storyPositions, containerWidth, autoZoom, reactFlow],
+  );
+
+  // Center on a specific node (called when user clicks a story node)
+  const centerOnNode = useCallback(
+    (nodeId: string) => {
+      const pos = storyPositions.get(nodeId);
+      if (!pos) return;
+      centeredRef.current = nodeId;
+      setCenteredNodeId(nodeId);
+      const centerY = (CONTENT_TOP + CONTENT_BOTTOM) / 2;
+      const centerX = pos.x + GRAPH_VISUAL_CONFIG.storyNode.width / 2;
+      reactFlow.setCenter(centerX, centerY, { zoom: autoZoom, duration: 300 });
+    },
+    [storyPositions, autoZoom, reactFlow],
   );
 
   // Build final nodes and edges
@@ -202,5 +232,6 @@ export function useRowLayout(
     maxDepth: engineResult?.maxDepth ?? 0,
     centeredNodeId,
     onViewportChange,
+    centerOnNode,
   };
 }

@@ -134,6 +134,9 @@ function GraphCanvasInner(props: GraphCanvasProps) {
   const handleNodeClick = useCallback(
     (_event: MouseEvent, node: StoryReactFlowNode) => {
       if (node.type === 'storyNode') {
+        if (isRowMode) {
+          rowLayout.centerOnNode(node.id);
+        }
         onSelectStoryNode?.(node.id);
       }
       // choiceNode clicks are handled by ChoiceNode's own onClick
