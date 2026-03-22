@@ -21,6 +21,15 @@ export const StoryNode: React.FC<NodeProps<ReactFlowNodeData>> = ({ data, select
   const imageSrc = data.image_url ?? undefined;
   const showImage = !!imageSrc && !imageFailed;
 
+  const dist = data.distanceFromCenter;
+  const rowStyle = dist != null
+    ? {
+        transform: `scale(${1 / (1 + GRAPH_VISUAL_CONFIG.rowMode.scaleFalloff * dist)})`,
+        opacity: 1 / (1 + GRAPH_VISUAL_CONFIG.rowMode.opacityFalloff * dist),
+        transition: 'transform 0.3s ease, opacity 0.3s ease',
+      }
+    : undefined;
+
   if (data.isPlaceholder) {
     return (
       <div className="relative">
@@ -32,6 +41,7 @@ export const StoryNode: React.FC<NodeProps<ReactFlowNodeData>> = ({ data, select
           style={{
             width: GRAPH_VISUAL_CONFIG.storyNode.width,
             height: GRAPH_VISUAL_CONFIG.storyNode.height,
+            ...rowStyle,
           }}
         >
           <div className="flex items-center justify-between text-xs uppercase tracking-wide text-white/80">
@@ -63,6 +73,7 @@ export const StoryNode: React.FC<NodeProps<ReactFlowNodeData>> = ({ data, select
         style={{
           width: GRAPH_VISUAL_CONFIG.storyNode.width,
           height: GRAPH_VISUAL_CONFIG.storyNode.height,
+          ...rowStyle,
         }}
       >
         <div className="flex items-center justify-between text-xs uppercase tracking-wide text-white/80">

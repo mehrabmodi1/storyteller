@@ -37,6 +37,15 @@ export const ChoiceNode: React.FC<NodeProps<ChoiceNodeData>> = ({ id, data, sele
   const accent = theme.button ?? 'bg-sky-600';
   const ringClass = getRingClass(theme.ring);
 
+  const dist = data.distanceFromCenter;
+  const rowStyle = dist != null
+    ? {
+        transform: `scale(${1 / (1 + GRAPH_VISUAL_CONFIG.rowMode.scaleFalloff * dist)})`,
+        opacity: 1 / (1 + GRAPH_VISUAL_CONFIG.rowMode.opacityFalloff * dist),
+        transition: 'transform 0.3s ease, opacity 0.3s ease',
+      }
+    : undefined;
+
   // Local state for textarea to avoid re-render cascade from parent useMemo
   const [localPrompt, setLocalPrompt] = useState(editablePrompt ?? data.label);
   const localPromptRef = useRef(localPrompt);
@@ -89,6 +98,7 @@ export const ChoiceNode: React.FC<NodeProps<ChoiceNodeData>> = ({ id, data, sele
         style={{
           width: GRAPH_VISUAL_CONFIG.choiceNode.width,
           height: isActive ? GRAPH_VISUAL_CONFIG.choiceNode.height * 1.4 : GRAPH_VISUAL_CONFIG.choiceNode.height,
+          ...rowStyle,
         }}
       >
         <div className="flex items-center justify-between text-xs uppercase tracking-wide text-white/80">
