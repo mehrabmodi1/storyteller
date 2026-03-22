@@ -23,7 +23,7 @@ __pycache__/
 
 # testing
 /coverage
-/validation/
+/validation/results/
 /.playwright-mcp/
 
 # next.js
