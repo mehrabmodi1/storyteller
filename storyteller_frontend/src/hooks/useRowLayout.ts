@@ -61,6 +61,7 @@ export function useRowLayout(
 
   const [centeredNodeId, setCenteredNodeId] = useState<string | null>(initialCenteredId);
   const centeredRef = useRef<string | null>(initialCenteredId);
+  const manualCenterUntilRef = useRef<number>(0); // skip auto-detection until this timestamp
 
   // Snap viewport when initial centered node changes (depth or graph change)
   useEffect(() => {
@@ -98,6 +99,9 @@ export function useRowLayout(
         reactFlow.setViewport({ x: viewport.x, y: expectedY, zoom: autoZoom }, { duration: 0 });
       }
 
+      // Skip auto-detection during manual centering animation
+      if (Date.now() < manualCenterUntilRef.current) return;
+
       const centerX = (-viewport.x + containerWidth / 2) / viewport.zoom;
       let closestId = engineResult.orderedNodeIds[0];
       let closestDist = Infinity;
@@ -127,6 +131,8 @@ export function useRowLayout(
       if (!pos) return;
       centeredRef.current = nodeId;
       setCenteredNodeId(nodeId);
+      // Suppress auto-detection during the animation so onMove doesn't snap back
+      manualCenterUntilRef.current = Date.now() + 400;
       const centerY = (CONTENT_TOP + CONTENT_BOTTOM) / 2;
       const centerX = pos.x + GRAPH_VISUAL_CONFIG.storyNode.width / 2;
       reactFlow.setCenter(centerX, centerY, { zoom: autoZoom, duration: 300 });

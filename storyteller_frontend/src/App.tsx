@@ -320,13 +320,30 @@ function AppContent() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-3xl font-semibold">Graph Visualization</h2>
-            <button
-              type="button"
-              onClick={handleToggleMode}
-              className="px-4 py-2 rounded-lg text-sm font-medium bg-slate-800 border border-slate-600 text-slate-300 hover:bg-slate-700 transition"
-            >
-              {graphMode === 'tree' ? '⬌ Row Mode' : '🌳 Tree Mode'}
-            </button>
+            <div className="inline-flex rounded-xl border border-white/20 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => graphMode !== 'tree' && handleToggleMode()}
+                className={`px-4 py-2 text-sm font-medium transition ${
+                  graphMode === 'tree'
+                    ? 'bg-white/15 text-white'
+                    : 'text-white/50 hover:text-white/80'
+                }`}
+              >
+                Tree
+              </button>
+              <button
+                type="button"
+                onClick={() => graphMode !== 'row' && handleToggleMode()}
+                className={`px-4 py-2 text-sm font-medium transition ${
+                  graphMode === 'row'
+                    ? 'bg-white/15 text-white'
+                    : 'text-white/50 hover:text-white/80'
+                }`}
+              >
+                Row
+              </button>
+            </div>
           </div>
           <GraphView
             graph={layoutGraph}
