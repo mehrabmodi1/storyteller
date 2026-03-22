@@ -8,12 +8,16 @@ Endpoints for managing text corpuses:
 - DELETE /api/corpuses/{name} - Delete corpus
 """
 
-from fastapi import APIRouter, HTTPException, status, BackgroundTasks
+import shutil
+from pathlib import Path
+
+from fastapi import APIRouter, HTTPException, status
 from typing import List
 from pydantic import BaseModel, Field
 
 from models.api_models import CorpusInfo
 from embed_retrieve import get_registry
+from config.settings import settings
 
 router = APIRouter()
 
@@ -43,39 +47,28 @@ async def list_corpuses():
         List of corpus information including status, chunk count, etc.
     """
     registry = get_registry()
-    corpuses = []
-    
-    # list_corpuses() returns list of dicts, not names
     corpus_list = registry.list_corpuses()
-    
+    corpuses = []
+
     for corpus_dict in corpus_list:
         corpus_name = corpus_dict['name']
-        corpus_config = registry.get_corpus(corpus_name)
-        if not corpus_config:
-            continue
-        
-        # Get status
         status_info = registry.check_corpus_status(corpus_name)
-        
         corpuses.append(CorpusInfo(
-            name=corpus_config.name,
-            display_name=corpus_config.display_name,
-            description=corpus_config.description,
-            is_active=corpus_config.is_active,
+            name=corpus_dict.get('name', corpus_name),
+            display_name=corpus_dict.get('display_name', corpus_name),
+            description=corpus_dict.get('description', ''),
+            is_active=corpus_dict.get('is_active', False),
             chunk_count=status_info.chunk_count if status_info else 0,
-            last_processed=corpus_config.last_processed,
+            last_processed=corpus_dict.get('last_processed'),
             needs_rebuild=status_info.needs_rebuild if status_info else False,
             missing_components=status_info.missing_components if status_info else []
         ))
-    
+
     return corpuses
 
 
 @router.post("/corpuses", status_code=status.HTTP_202_ACCEPTED)
-async def create_corpus(
-    corpus_request: CorpusCreateRequest,
-    background_tasks: BackgroundTasks
-):
+async def create_corpus(corpus_request: CorpusCreateRequest):
     """
     Trigger ingestion of a new corpus.
     
@@ -84,8 +77,7 @@ async def create_corpus(
     
     Args:
         corpus_request: Corpus configuration
-        background_tasks: FastAPI background tasks
-    
+
     Returns:
         Confirmation that ingestion has been queued
     """
@@ -97,10 +89,6 @@ async def create_corpus(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Corpus '{corpus_request.name}' already exists"
         )
-    
-    # Validate source file exists
-    from pathlib import Path
-    from config.settings import settings
     
     source_path = settings.data_path.parent / corpus_request.source_file
     if not source_path.exists():
@@ -123,9 +111,6 @@ async def create_corpus(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to add corpus to registry: {str(e)}"
         )
-    
-    # TODO: Queue background ingestion task
-    # background_tasks.add_task(ingest_corpus, corpus_request.name)
     
     return {
         "success": True,
@@ -214,21 +199,10 @@ async def delete_corpus(name: str, delete_data: bool = False):
     
     # Optionally delete data files
     if delete_data:
-        import shutil
-        from pathlib import Path
-        
         try:
-            # Delete ChromaDB
-            if Path(corpus.chroma_db_path).exists():
-                shutil.rmtree(corpus.chroma_db_path)
-            
-            # Delete BM25 index
-            if Path(corpus.bm25_index_path).exists():
-                Path(corpus.bm25_index_path).unlink()
-            
-            # Delete cached chunks
-            if Path(corpus.cache_dir).exists():
-                shutil.rmtree(corpus.cache_dir)
+            shutil.rmtree(corpus.chroma_db_path, ignore_errors=True)
+            Path(corpus.bm25_index_path).unlink(missing_ok=True)
+            shutil.rmtree(corpus.cache_dir, ignore_errors=True)
         except Exception as e:
             return {
                 "success": True,

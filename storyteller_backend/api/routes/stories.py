@@ -68,15 +68,12 @@ async def story_generation_events(
         corpus_name = "mahabharata"
     
     try:
-        # Get current graph
         current_graph = await graph_state.get_graph()
 
-        # If this is a new journey, clear the graph
         if new_journey:
             current_graph = nx.DiGraph()
             await graph_state.clear_graph()
 
-        # If continuing a journey (choice_id provided), ensure the graph is loaded
         if choice_id and choice_id not in current_graph:
             # In-memory graph doesn't have this node — load from disk
             if graph_id and username:
@@ -90,18 +87,15 @@ async def story_generation_events(
                     yield {"event": "error", "data": f"Could not load saved journey: {e}"}
                     return
 
-            # Still not found after disk load attempt
             if choice_id not in current_graph:
                 print(f"ERROR: Client requested choice_id '{choice_id}' which does not exist in the server's graph.")
                 print(f"Available nodes: {list(current_graph.nodes())}")
                 yield {"event": "error", "data": "Client and server are out of sync. Please start a new journey."}
                 return
         
-        # If a choice was selected, update its label in the graph to persist edits
         if choice_id and choice_id in current_graph:
             current_graph.nodes[choice_id]['label'] = prompt
         
-        # Prepare initial state for the agent
         initial_state: StorytellerState = {
             "messages": [HumanMessage(content=prompt)],
             "graph": current_graph.copy(),  # Work on a copy
@@ -126,16 +120,12 @@ async def story_generation_events(
             "parent_image_prompt": None,
         }
         
-        # Get the story agent
         story_agent = get_story_agent()
-        
-        # Stream events from the agent
         is_generating_story = False
         async for event in story_agent.astream_events(initial_state, version="v1"):
             event_type = event['event']
             event_name = event.get('name')
             
-            # Detect guardrail rejection — emitted before any generation begins
             if event_type == "on_chain_end" and event_name == 'screen_prompt':
                 node_output = event['data'].get('output', {})
                 if node_output.get('guardrail_rejected'):
@@ -145,28 +135,22 @@ async def story_generation_events(
                     }
                     return
 
-            # Track when we're in story generation phase
             if event_type == 'on_chain_start' and event_name == 'generate_story':
                 is_generating_story = True
             elif event_type == 'on_chain_end' and event_name == 'generate_story':
                 is_generating_story = False
 
-            # Stream story tokens as they're generated
             if is_generating_story and event_type == "on_chat_model_stream":
                 token = event['data']['chunk'].content
                 if token:
                     yield {"event": "story_chunk", "data": token}
 
-            # At the end, get the final state and updated graph
             elif event_type == "on_chain_end" and event_name == 'update_graph_with_choices':
                 node_output = event['data'].get('output')
                 if node_output and 'serializable_graph' in node_output:
-                    # Update the global graph state
                     await graph_state.set_graph(node_output['graph'])
-                    # Send the final graph
                     yield {"event": "message", "data": json.dumps(node_output['serializable_graph'])}
         
-        # Signal completion
         print(f"[{datetime.now()}] Ending SSE stream.")
         yield {"event": "end", "data": "Stream ended."}
     
@@ -180,7 +164,7 @@ async def story_generation_events(
 
 @router.get("/stream_story")
 async def stream_story(
-    prompt: str = Query(..., description="User's story prompt"),
+    prompt: str = Query(..., min_length=1, max_length=500, description="User's story prompt"),
     choice_id: Optional[str] = Query(None, description="ID of selected choice node"),
     new_journey: bool = Query(False, description="Start a new journey"),
     paragraph_count: int = Query(4, ge=1, le=8, description="Number of paragraphs to generate (1-8)"),

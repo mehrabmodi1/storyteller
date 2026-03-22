@@ -6,7 +6,7 @@
 import { useEffect, useState } from 'react';
 import { BaseDropdown } from './BaseDropdown';
 import { useApp } from '@/context/AppContext';
-import { listGraphs, loadGraph, getLoadedGraph } from '@/services/api';
+import { listGraphs, loadGraph } from '@/services/api';
 import type { JourneyMeta, GraphData } from '@/types';
 
 interface JourneyDropdownProps {
@@ -20,24 +20,16 @@ export function JourneyDropdown({ onJourneyLoad, onGraphLoaded }: JourneyDropdow
   const [selectedJourney, setSelectedJourney] = useState<JourneyMeta | null>(null);
   const [loading, setLoading] = useState(false);
   
-  console.log('[JourneyDropdown] Rendering with username:', username, 'journeys:', journeys.length);
-  
-  // Load journeys when username changes
   useEffect(() => {
     async function loadJourneys() {
-      console.log('[JourneyDropdown] Username changed:', username);
-      
       if (!username) {
-        console.log('[JourneyDropdown] No username, clearing journeys');
         setJourneys([]);
         return;
       }
-      
+
       try {
-        console.log('[JourneyDropdown] Loading journeys for:', username);
         setLoading(true);
         const response = await listGraphs(username);
-        console.log('[JourneyDropdown] Received journeys:', response.journeys.length);
         setJourneys(response.journeys);
       } catch (error) {
         console.error('[JourneyDropdown] Failed to load journeys:', error);
@@ -62,10 +54,8 @@ export function JourneyDropdown({ onJourneyLoad, onGraphLoaded }: JourneyDropdow
         onJourneyLoad?.(journey);
         setCorpus(journey.corpus_name);
 
-        // Fetch the loaded graph data for debugging/visualization
-        const graphResponse = await getLoadedGraph();
-        if (graphResponse?.graph) {
-          onGraphLoaded?.(graphResponse.graph);
+        if (response.graph) {
+          onGraphLoaded?.(response.graph);
         }
       } else {
         console.error('Failed to load journey:', response.error);

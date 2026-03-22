@@ -6,4 +6,5 @@ export { useLocalStorage } from './useLocalStorage';
 export { useSSE } from './useSSE';
 export type { UseSSEResult } from './useSSE';
 export { useELKLayout } from './useELKLayout';
+export { useRowLayout } from './useRowLayout';
 

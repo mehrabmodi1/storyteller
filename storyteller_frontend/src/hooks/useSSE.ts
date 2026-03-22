@@ -6,6 +6,15 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { GraphData } from '@/types';
 
+const SSE_EVENT = {
+  STORY_CHUNK: 'story_chunk',
+  MESSAGE: 'message',
+  GRAPH_DATA: 'graph_data',
+  END: 'end',
+  ERROR: 'error',
+  GUARDRAIL_REJECT: 'guardrail_reject',
+} as const;
+
 export interface UseSSEResult {
   streamingText: string;
   graphData: GraphData | null;
@@ -30,7 +39,6 @@ export function useSSE(url: string | null): UseSSEResult {
   
   const eventSourceRef = useRef<EventSource | null>(null);
   
-  // Function to close the stream manually
   const closeStream = useCallback(() => {
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
@@ -45,23 +53,19 @@ export function useSSE(url: string | null): UseSSEResult {
       return;
     }
     
-    // Reset state
     setStreamingText('');
     setGraphData(null);
     setError(null);
     setGuardrailMessage(null);
     setIsStreaming(true);
     
-    // Create EventSource
     const eventSource = new EventSource(url);
     eventSourceRef.current = eventSource;
     
-    // Handle story chunks
     const handleChunk = (event: MessageEvent) => {
       setStreamingText((prev) => prev + event.data);
     };
     
-    // Handle complete graph data
     const handleGraph = (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data);
@@ -72,7 +76,6 @@ export function useSSE(url: string | null): UseSSEResult {
       }
     };
     
-    // Handle backend error events (event: error with data)
     const handleBackendError = (event: MessageEvent) => {
       console.error('SSE backend error:', event.data);
       setError(new Error(event.data || 'Stream error'));
@@ -80,7 +83,6 @@ export function useSSE(url: string | null): UseSSEResult {
       setIsStreaming(false);
     };
 
-    // Handle connection errors (native EventSource error)
     const handleConnectionError = (event: Event) => {
       console.error('SSE connection error:', event);
       setError(new Error('Stream connection failed'));
@@ -88,32 +90,33 @@ export function useSSE(url: string | null): UseSSEResult {
       setIsStreaming(false);
     };
     
-    // Handle stream end
     const handleEnd = () => {
       eventSource.close();
       setIsStreaming(false);
     };
 
-    // Handle guardrail rejection
     const handleGuardrailReject = (event: MessageEvent) => {
       setGuardrailMessage(event.data);
       eventSource.close();
       setIsStreaming(false);
     };
 
-    // Register event listeners
-    eventSource.addEventListener('story_chunk', handleChunk);
-    // Backend sends final graph on the default 'message' event; keep legacy name as fallback.
-    eventSource.addEventListener('message', handleGraph);
-    eventSource.addEventListener('graph_data', handleGraph);
-    eventSource.addEventListener('end', handleEnd);
-    eventSource.addEventListener('error', handleBackendError as EventListener);
-    eventSource.addEventListener('guardrail_reject', handleGuardrailReject as EventListener);
+    eventSource.addEventListener(SSE_EVENT.STORY_CHUNK, handleChunk);
+    eventSource.addEventListener(SSE_EVENT.MESSAGE, handleGraph);
+    eventSource.addEventListener(SSE_EVENT.GRAPH_DATA, handleGraph);
+    eventSource.addEventListener(SSE_EVENT.END, handleEnd);
+    eventSource.addEventListener(SSE_EVENT.ERROR, handleBackendError as EventListener);
+    eventSource.addEventListener(SSE_EVENT.GUARDRAIL_REJECT, handleGuardrailReject as EventListener);
     eventSource.onerror = handleConnectionError;
 
-    // Cleanup on unmount or URL change
     return () => {
-      eventSource.removeEventListener('guardrail_reject', handleGuardrailReject as EventListener);
+      eventSource.removeEventListener(SSE_EVENT.STORY_CHUNK, handleChunk);
+      eventSource.removeEventListener(SSE_EVENT.MESSAGE, handleGraph);
+      eventSource.removeEventListener(SSE_EVENT.GRAPH_DATA, handleGraph);
+      eventSource.removeEventListener(SSE_EVENT.END, handleEnd);
+      eventSource.removeEventListener(SSE_EVENT.ERROR, handleBackendError as EventListener);
+      eventSource.removeEventListener(SSE_EVENT.GUARDRAIL_REJECT, handleGuardrailReject as EventListener);
+      eventSource.onerror = null;
       eventSource.close();
       setIsStreaming(false);
     };

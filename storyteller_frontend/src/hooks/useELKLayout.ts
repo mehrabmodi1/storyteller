@@ -21,10 +21,8 @@ export function useELKLayout(graph: TransformedGraph | null) {
 
   const nodeKey = useMemo(() => {
     if (!graph) return null;
-    return `${graph.nodes.map((n) => n.id).join('|')}|${graph.edges
-      .map((e) => `${e.source}->${e.target}`)
-      .join('|')}`;
-  }, [graph]);
+    return `${graph.nodes.length}:${graph.edges.length}:${graph.latestStoryNodeId ?? ''}`;
+  }, [graph?.nodes.length, graph?.edges.length, graph?.latestStoryNodeId]);
 
   useEffect(() => {
     if (!graph || !graph.nodes.length) {

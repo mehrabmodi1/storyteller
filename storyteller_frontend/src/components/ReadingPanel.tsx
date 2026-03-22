@@ -60,5 +60,3 @@ export const ReadingPanel: React.FC<ReadingPanelProps> = ({
     </div>
   );
 };
-
-export default ReadingPanel;

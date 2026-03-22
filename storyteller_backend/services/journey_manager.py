@@ -97,19 +97,16 @@ class JourneyManager:
         
         file_path = os.path.join(dir_path, graph_name)
         
-        # Find the latest story node timestamp
-        story_timestamps = [
-            d.get('timestamp')
-            for _, d in graph.nodes(data=True)
-            if d.get('type') == 'story' and d.get('timestamp')
-        ]
+        # Collect story node stats in a single pass
+        story_timestamps = []
+        num_story_nodes = 0
+        for _, d in graph.nodes(data=True):
+            if d.get('type') == 'story':
+                num_story_nodes += 1
+                ts = d.get('timestamp')
+                if ts:
+                    story_timestamps.append(ts)
         last_story_timestamp = max(story_timestamps) if story_timestamps else None
-        
-        # Count story nodes
-        num_story_nodes = sum(
-            1 for _, d in graph.nodes(data=True)
-            if d.get('type') == 'story'
-        )
         
         # Prepare data structure
         data = {

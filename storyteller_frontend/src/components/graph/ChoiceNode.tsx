@@ -3,6 +3,7 @@ import { Handle, Position, type NodeProps } from 'reactflow';
 import type { ReactFlowNodeData } from '@/types/graph.types';
 import { DEFAULT_THEME } from '@/context/AppContext';
 import { GRAPH_VISUAL_CONFIG } from '@/config/graph.config';
+import { getRingClass } from '@/utils/themeUtils';
 
 type ChoiceNodeData = ReactFlowNodeData & {
   choiceProps?: {
@@ -14,13 +15,6 @@ type ChoiceNodeData = ReactFlowNodeData & {
     onSelectChoice?: (nodeId: string) => void;
   };
 };
-
-function getRingClass(themeRing?: string | null) {
-  if (!themeRing) {
-    return 'ring-sky-400';
-  }
-  return themeRing.replace('focus:', '');
-}
 
 export const ChoiceNode: React.FC<NodeProps<ChoiceNodeData>> = ({ id, data, selected }) => {
   const {
@@ -35,7 +29,7 @@ export const ChoiceNode: React.FC<NodeProps<ChoiceNodeData>> = ({ id, data, sele
   const theme = data.theme ?? DEFAULT_THEME;
   const background = theme.input ?? 'bg-slate-900';
   const accent = theme.button ?? 'bg-sky-600';
-  const ringClass = getRingClass(theme.ring);
+  const ringClass = getRingClass(theme.ring, 'ring-sky-400');
 
   const dist = data.distanceFromCenter;
   const isExplored = data.isExplored ?? false;
@@ -47,20 +41,17 @@ export const ChoiceNode: React.FC<NodeProps<ChoiceNodeData>> = ({ id, data, sele
       }
     : undefined;
 
-  // Local state for textarea to avoid re-render cascade from parent useMemo
   const [localPrompt, setLocalPrompt] = useState(editablePrompt ?? data.label);
   const localPromptRef = useRef(localPrompt);
   localPromptRef.current = localPrompt;
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Re-initialize local state when the node becomes active
   useEffect(() => {
     if (isActive) {
       setLocalPrompt(editablePrompt ?? data.label);
     }
   }, [isActive]);
 
-  // Move cursor to end of textarea when it becomes active
   useEffect(() => {
     if (isActive && textareaRef.current) {
       const len = textareaRef.current.value.length;

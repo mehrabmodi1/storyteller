@@ -161,7 +161,8 @@ class JourneyListResponse(BaseModel):
 
 class GraphNode(BaseModel):
     """A node in the story graph."""
-    
+    model_config = {"extra": "allow"}
+
     id: str = Field(..., description="Unique node ID")
     type: str = Field(..., description="Node type: 'story' or 'choice'")
     label: str = Field(..., description="Node label (choice text or story title)")
@@ -204,11 +205,15 @@ class LoadGraphRequest(BaseModel):
 
 class LoadGraphResponse(BaseModel):
     """Response after loading a graph."""
-    
+
     success: bool = Field(..., description="Whether load was successful")
     meta: Optional[Dict[str, Any]] = Field(
         default=None,
         description="Graph metadata"
+    )
+    graph: Optional[GraphData] = Field(
+        default=None,
+        description="The loaded graph data"
     )
     error: Optional[str] = Field(
         default=None,

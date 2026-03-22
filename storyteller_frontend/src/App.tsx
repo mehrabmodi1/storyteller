@@ -24,8 +24,7 @@ function AppContent() {
   const [showDebug, setShowDebug] = useState(false);
   const [showReadingPanel, setShowReadingPanel] = useState(false);
   const [currentStoryTitle, setCurrentStoryTitle] = useState<string>('Story');
-  const [activeChoiceId, setActiveChoiceId] = useState<string | null>(null);
-  const [activeChoicePrompt, setActiveChoicePrompt] = useState<string>('');
+  const [activeChoice, setActiveChoice] = useState<{ id: string; prompt: string } | null>(null);
   const [journeyError, setJourneyError] = useState<string | null>(null);
   const [viewingStoryText, setViewingStoryText] = useState<string | null>(null);
   const [currentGraphId, setCurrentGraphId] = useState<string | null>(null);
@@ -70,10 +69,8 @@ function AppContent() {
     setJourneyError(null);
     setJourneyPersona(persona);
     setCurrentStoryTitle(trimmedPrompt);
-    setActiveChoiceId(null);
-    setActiveChoicePrompt('');
+    setActiveChoice(null);
     setCurrentGraphId(null);
-    // Test hook: prompt starting with "!error" triggers a simulated stream error
     const isTestError = trimmedPrompt.startsWith('!error');
     const sseUrl = buildStreamStoryURL({
       prompt: isTestError ? trimmedPrompt.slice(6).trim() || 'test' : trimmedPrompt,
@@ -105,11 +102,9 @@ function AppContent() {
       pendingPlaceholderIdRef.current = null;
       setRawGraph(streamingGraph);
       setPromptInput('');
-      setActiveChoiceId(null);
-      setActiveChoicePrompt('');
+      setActiveChoice(null);
       setStreamUrl(null);
       setJourneyError(null);
-      // Extract graph_id from the SSE response metadata
       const graphName = streamingGraph.graph?.graph_name;
       if (graphName) {
         setCurrentGraphId(graphName);
@@ -150,14 +145,12 @@ function AppContent() {
         }
       }
     }
-    setActiveChoiceId(nodeId);
     const choiceNode = rawGraph?.nodes.find((n) => n.id === nodeId);
-    setActiveChoicePrompt(choiceNode?.label ?? '');
+    setActiveChoice({ id: nodeId, prompt: choiceNode?.label ?? '' });
   };
 
   const handleCancelChoiceEdit = () => {
-    setActiveChoiceId(null);
-    setActiveChoicePrompt('');
+    setActiveChoice(null);
   };
 
   const handleSelectStoryNode = (nodeId: string) => {
@@ -176,15 +169,14 @@ function AppContent() {
   };
 
   const handleSubmitContinuation = (textOverride?: string) => {
-    if (!activeChoiceId) return;
-    const trimmed = (textOverride ?? activeChoicePrompt).trim();
+    if (!activeChoice) return;
+    const trimmed = (textOverride ?? activeChoice.prompt).trim();
     if (!trimmed) return;
 
     setCurrentStoryTitle(trimmed);
 
-    // Optimistically insert a placeholder story node connected to the selected choice
     const placeholderId = `placeholder-story-${Date.now()}`;
-    const choiceId = activeChoiceId;
+    const choiceId = activeChoice.id;
     pendingPlaceholderIdRef.current = placeholderId;
     setRawGraph((prev) =>
       prev
@@ -208,8 +200,7 @@ function AppContent() {
     });
     setStreamUrl(sseUrl);
     setShowReadingPanel(true);
-    setActiveChoiceId(null);
-    setActiveChoicePrompt('');
+    setActiveChoice(null);
   };
 
   const handleNewJourneyKeyDown: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
@@ -353,9 +344,9 @@ function AppContent() {
             onRowDepthChange={setRowDepth}
             onSelectChoice={handleSelectChoice}
             onSelectStoryNode={handleSelectStoryNode}
-            activeChoiceId={activeChoiceId}
-            editablePrompt={activeChoicePrompt}
-            onChangePrompt={setActiveChoicePrompt}
+            activeChoiceId={activeChoice?.id ?? null}
+            editablePrompt={activeChoice?.prompt ?? ''}
+            onChangePrompt={(p) => setActiveChoice((prev) => prev ? { ...prev, prompt: p } : null)}
             onSubmitPrompt={handleSubmitContinuation}
             onCancelEdit={handleCancelChoiceEdit}
           />

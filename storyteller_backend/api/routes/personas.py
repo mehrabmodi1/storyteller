@@ -19,29 +19,29 @@ from config.settings import settings
 
 router = APIRouter()
 
-
-def _get_personas_file_path() -> Path:
-    """Get the path to the personas.json file."""
-    return Path(__file__).parent.parent.parent / settings.personas_file
+_personas_file_path: Path = Path(__file__).parent.parent.parent / settings.personas_file
+_personas_cache: List[dict] | None = None
 
 
 def _load_personas() -> List[dict]:
-    """Load personas from JSON file."""
-    personas_file = _get_personas_file_path()
-    if not personas_file.exists():
+    """Load personas from JSON file, using an in-memory cache."""
+    global _personas_cache
+    if _personas_cache is not None:
+        return _personas_cache
+    if not _personas_file_path.exists():
         return []
-    
-    with open(personas_file, 'r') as f:
-        return json.load(f)
+    with open(_personas_file_path, 'r') as f:
+        _personas_cache = json.load(f)
+    return _personas_cache
 
 
 def _save_personas(personas: List[dict]) -> None:
-    """Save personas to JSON file."""
-    personas_file = _get_personas_file_path()
-    personas_file.parent.mkdir(parents=True, exist_ok=True)
-    
-    with open(personas_file, 'w') as f:
+    """Save personas to JSON file and invalidate the cache."""
+    global _personas_cache
+    _personas_file_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(_personas_file_path, 'w') as f:
         json.dump(personas, f, indent=2)
+    _personas_cache = personas
 
 
 @router.get("/personas", response_model=List[PersonaInfo])

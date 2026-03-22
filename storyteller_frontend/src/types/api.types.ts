@@ -3,6 +3,8 @@
  * These types mirror the Pydantic models in storyteller_backend/models/api_models.py
  */
 
+import type { GraphData } from './graph.types';
+
 /**
  * Request model for story generation
  */
@@ -109,6 +111,7 @@ export interface LoadGraphRequest {
 export interface LoadGraphResponse {
   success: boolean;
   meta?: Record<string, any> | null;
+  graph?: GraphData | null;
   error?: string | null;
 }
 
