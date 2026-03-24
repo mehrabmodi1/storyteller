@@ -1,0 +1,400 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { AppProvider, useApp, DEFAULT_THEME } from '@/context/AppContext';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { PersonaDropdown } from '@/components/dropdowns/PersonaDropdown';
+import { CorpusDropdown } from '@/components/dropdowns/CorpusDropdown';
+import { UsernameDropdown } from '@/components/dropdowns/UsernameDropdown';
+import { JourneyDropdown } from '@/components/dropdowns/JourneyDropdown';
+import { ParagraphCountSlider } from '@/components/ParagraphCountSlider';
+import { GraphDebugPanel } from '@/components/debug';
+import { GraphView } from '@/components/graph/GraphView';
+import { ReadingPanel } from '@/components/ReadingPanel';
+import type { ColorTheme, GraphData, JourneyMeta } from '@/types';
+import { transformGraphData, TransformedGraph } from '@/utils/graphTransform';
+import { useELKLayout } from '@/hooks/useELKLayout';
+import { buildStreamStoryURL } from '@/services/api';
+import { useSSE } from '@/hooks';
+
+function AppContent() {
+  const { persona, theme, personas, personasLoading, username, corpus, setCorpus } = useApp();
+  const [rawGraph, setRawGraph] = useState<GraphData | null>(null);
+  const [journeyPersona, setJourneyPersona] = useState<string | null>(null);
+  const [promptInput, setPromptInput] = useState('');
+  const [streamUrl, setStreamUrl] = useState<string | null>(null);
+  const [showDebug, setShowDebug] = useState(false);
+  const [showReadingPanel, setShowReadingPanel] = useState(false);
+  const [currentStoryTitle, setCurrentStoryTitle] = useState<string>('Story');
+  const [activeChoice, setActiveChoice] = useState<{ id: string; prompt: string } | null>(null);
+  const [journeyError, setJourneyError] = useState<string | null>(null);
+  const [viewingStoryText, setViewingStoryText] = useState<string | null>(null);
+  const [currentGraphId, setCurrentGraphId] = useState<string | null>(null);
+  const [paragraphCount, setParagraphCount] = useState(4);
+  const [graphMode, setGraphMode] = useState<'tree' | 'row'>('tree');
+  const [rowDepth, setRowDepth] = useState(0);
+  const pendingPlaceholderIdRef = useRef<string | null>(null);
+  const { graphData: streamingGraph, isStreaming, error: streamError, closeStream, streamingText, guardrailMessage } = useSSE(streamUrl);
+
+  const journeyPersonaTheme = useMemo<ColorTheme>(() => {
+    if (!journeyPersona) {
+      return DEFAULT_THEME;
+    }
+    return (
+      personas.find((p) => p.name === journeyPersona)?.color_theme ??
+      DEFAULT_THEME
+    );
+  }, [journeyPersona, personas]);
+
+  const transformedGraph = useMemo<TransformedGraph | null>(() => {
+    if (!rawGraph) {
+      return null;
+    }
+    return transformGraphData(rawGraph, {
+      personaName: journeyPersona,
+      personaTheme: journeyPersonaTheme,
+    });
+  }, [rawGraph, journeyPersona, journeyPersonaTheme]);
+  const { layout: layoutGraph } = useELKLayout(transformedGraph);
+
+  const handleJourneyLoad = (journey: JourneyMeta) => {
+    setJourneyPersona(journey.persona);
+    setCorpus(journey.corpus_name);
+    setCurrentGraphId(journey.graph_id);
+  };
+
+  const handleStartNewJourney = () => {
+    const trimmedPrompt = promptInput.trim();
+    if (!trimmedPrompt) {
+      return;
+    }
+    setJourneyError(null);
+    setJourneyPersona(persona);
+    setCurrentStoryTitle(trimmedPrompt);
+    setActiveChoice(null);
+    setCurrentGraphId(null);
+    const isTestError = trimmedPrompt.startsWith('!error');
+    const sseUrl = buildStreamStoryURL({
+      prompt: isTestError ? trimmedPrompt.slice(6).trim() || 'test' : trimmedPrompt,
+      new_journey: true,
+      persona_name: persona,
+      username,
+      corpus_name: isTestError ? '__test_error__' : corpus,
+      paragraph_count: paragraphCount,
+    });
+    // Optimistically add a placeholder story node so the graph isn't blank during streaming
+    const placeholderId = `placeholder-story-${Date.now()}`;
+    pendingPlaceholderIdRef.current = placeholderId;
+    setRawGraph({
+      nodes: [{ id: placeholderId, type: 'story', label: trimmedPrompt, isPlaceholder: true }],
+      links: [],
+    });
+    setStreamUrl(sseUrl);
+  };
+
+  useEffect(() => {
+    if (isStreaming) {
+      setViewingStoryText(null);
+      setShowReadingPanel(true);
+    }
+  }, [isStreaming]);
+
+  useEffect(() => {
+    if (streamingGraph) {
+      pendingPlaceholderIdRef.current = null;
+      setRawGraph(streamingGraph);
+      setPromptInput('');
+      setActiveChoice(null);
+      setStreamUrl(null);
+      setJourneyError(null);
+      const graphName = streamingGraph.graph?.graph_name;
+      if (graphName) {
+        setCurrentGraphId(graphName);
+      }
+    }
+  }, [streamingGraph]);
+
+  useEffect(() => {
+    if (streamError) {
+      setJourneyError(streamError.message);
+      setStreamUrl(null);
+      // Remove the placeholder node so a failed stream doesn't leave a stale spinner
+      const placeholderId = pendingPlaceholderIdRef.current;
+      if (placeholderId) {
+        pendingPlaceholderIdRef.current = null;
+        setRawGraph((prev) =>
+          prev
+            ? {
+                ...prev,
+                nodes: prev.nodes.filter((n) => n.id !== placeholderId),
+                links: prev.links.filter((l) => l.target !== placeholderId),
+              }
+            : prev,
+        );
+      }
+    }
+  }, [streamError]);
+
+  const handleSelectChoice = (nodeId: string) => {
+    // If this choice has been explored (has a child story node), open that story's read panel instead
+    if (rawGraph) {
+      const childEdge = rawGraph.links.find((l) => l.source === nodeId);
+      if (childEdge) {
+        const childStory = rawGraph.nodes.find((n) => n.id === childEdge.target && n.type === 'story');
+        if (childStory) {
+          handleSelectStoryNode(childStory.id);
+          return;
+        }
+      }
+    }
+    const choiceNode = rawGraph?.nodes.find((n) => n.id === nodeId);
+    setActiveChoice({ id: nodeId, prompt: choiceNode?.label ?? '' });
+  };
+
+  const handleCancelChoiceEdit = () => {
+    setActiveChoice(null);
+  };
+
+  const handleSelectStoryNode = (nodeId: string) => {
+    if (nodeId === pendingPlaceholderIdRef.current) {
+      // Clicking the placeholder reopens the reading panel to show streaming/completed text
+      setViewingStoryText(null);
+      setShowReadingPanel(true);
+      return;
+    }
+    const storyNode = rawGraph?.nodes.find((n) => n.id === nodeId);
+    if (storyNode) {
+      setCurrentStoryTitle(storyNode.label);
+      setViewingStoryText(storyNode.story ?? null);
+      setShowReadingPanel(true);
+    }
+  };
+
+  const handleSubmitContinuation = (textOverride?: string) => {
+    if (!activeChoice) return;
+    const trimmed = (textOverride ?? activeChoice.prompt).trim();
+    if (!trimmed) return;
+
+    setCurrentStoryTitle(trimmed);
+
+    const placeholderId = `placeholder-story-${Date.now()}`;
+    const choiceId = activeChoice.id;
+    pendingPlaceholderIdRef.current = placeholderId;
+    setRawGraph((prev) =>
+      prev
+        ? {
+            ...prev,
+            nodes: [...prev.nodes, { id: placeholderId, type: 'story' as const, label: trimmed, isPlaceholder: true }],
+            links: [...prev.links, { source: choiceId, target: placeholderId }],
+          }
+        : prev,
+    );
+
+    const sseUrl = buildStreamStoryURL({
+      prompt: trimmed,
+      choice_id: choiceId,
+      new_journey: false,
+      persona_name: journeyPersona ?? persona,
+      username,
+      corpus_name: corpus,
+      graph_id: currentGraphId ?? undefined,
+      paragraph_count: paragraphCount,
+    });
+    setStreamUrl(sseUrl);
+    setShowReadingPanel(true);
+    setActiveChoice(null);
+  };
+
+  const handleNewJourneyKeyDown: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleStartNewJourney();
+    }
+  };
+
+  const handleToggleMode = () => {
+    setGraphMode((prev) => {
+      const next = prev === 'tree' ? 'row' : 'tree';
+      if (next === 'row') setRowDepth(0);
+      return next;
+    });
+  };
+
+  return (
+    <div
+      className={`min-h-screen transition-colors ${
+        theme?.background || 'bg-gray-900'
+      } text-white`}
+    >
+      <div className="container mx-auto px-4 py-8 space-y-8">
+        <div className="space-y-4">
+          <h1 className="text-3xl font-semibold text-white">Story Controls</h1>
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+              <div>
+                <p className="text-sm text-white/70 mb-1">Username</p>
+                <UsernameDropdown />
+              </div>
+              <div>
+                <p className="text-sm text-white/70 mb-1">Persona</p>
+                {personasLoading ? (
+                  <div className="text-gray-400">Loading personas...</div>
+                ) : (
+                  <PersonaDropdown />
+                )}
+              </div>
+              <div>
+                <p className="text-sm text-white/70 mb-1">Corpus</p>
+                <CorpusDropdown />
+              </div>
+              <div>
+                <p className="text-sm text-white/70 mb-1">Load Journey</p>
+                <JourneyDropdown
+                  onJourneyLoad={handleJourneyLoad}
+                  onGraphLoaded={setRawGraph}
+                />
+              </div>
+              <div>
+                <p className="text-sm text-white/70 mb-1">Story Length</p>
+                <ParagraphCountSlider
+                  value={paragraphCount}
+                  onChange={setParagraphCount}
+                  disabled={isStreaming}
+                />
+              </div>
+            </div>
+            <div className="flex flex-col md:flex-row gap-4 items-stretch">
+              <div className="flex-1">
+                <p className="text-sm text-white/70 mb-1">Start a new journey</p>
+                <input
+                  type="text"
+                  value={promptInput}
+                  onChange={(e) => setPromptInput(e.target.value)}
+                  onKeyDown={handleNewJourneyKeyDown}
+                  placeholder="Enter an opening prompt..."
+                  id="new-journey-prompt"
+                  name="new-journey-prompt"
+                  className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-white/50"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleStartNewJourney}
+                disabled={!promptInput.trim() || isStreaming}
+                className={`md:w-56 px-6 py-3 rounded-xl font-semibold transition flex items-center justify-center ${
+                  !promptInput.trim() || isStreaming
+                    ? 'bg-white/20 text-white/60 cursor-not-allowed'
+                    : 'bg-white text-gray-900 hover:bg-gray-200'
+                }`}
+              >
+                {isStreaming ? 'Starting…' : 'Start New Journey'}
+              </button>
+            </div>
+            {journeyError ? (
+              <p className="text-sm text-red-400">
+                Failed to start journey: {journeyError}
+                <button
+                  type="button"
+                  onClick={() => { setJourneyError(null); closeStream(); }}
+                  className="ml-3 underline text-red-200 hover:text-red-100"
+                >
+                  Dismiss
+                </button>
+              </p>
+            ) : null}
+            {guardrailMessage ? (
+              <p className="text-sm text-amber-400">
+                {guardrailMessage}
+              </p>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-3xl font-semibold">Graph Visualization</h2>
+            <div className="inline-flex rounded-xl border border-white/20 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => graphMode !== 'tree' && handleToggleMode()}
+                className={`px-4 py-2 text-sm font-medium transition ${
+                  graphMode === 'tree'
+                    ? 'bg-white/15 text-white'
+                    : 'text-white/50 hover:text-white/80'
+                }`}
+              >
+                Tree
+              </button>
+              <button
+                type="button"
+                onClick={() => graphMode !== 'row' && handleToggleMode()}
+                className={`px-4 py-2 text-sm font-medium transition ${
+                  graphMode === 'row'
+                    ? 'bg-white/15 text-white'
+                    : 'text-white/50 hover:text-white/80'
+                }`}
+              >
+                Row
+              </button>
+            </div>
+          </div>
+          <GraphView
+            graph={layoutGraph}
+            transformedGraph={transformedGraph}
+            mode={graphMode}
+            rowDepth={rowDepth}
+            onRowDepthChange={setRowDepth}
+            onSelectChoice={handleSelectChoice}
+            onSelectStoryNode={handleSelectStoryNode}
+            activeChoiceId={activeChoice?.id ?? null}
+            editablePrompt={activeChoice?.prompt ?? ''}
+            onChangePrompt={(p) => setActiveChoice((prev) => prev ? { ...prev, prompt: p } : null)}
+            onSubmitPrompt={handleSubmitContinuation}
+            onCancelEdit={handleCancelChoiceEdit}
+          />
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => setShowDebug((prev) => !prev)}
+              className="text-sm text-white/70 underline hover:text-white"
+            >
+              {showDebug ? 'Hide debug info' : 'Show debug info'}
+            </button>
+          </div>
+        </div>
+
+        {showDebug && (
+          <div className="bg-black/30 rounded-2xl border border-white/10 p-4">
+            <GraphDebugPanel
+              rawGraph={rawGraph}
+              transformed={transformedGraph}
+              layoutGraph={layoutGraph}
+              isStreaming={isStreaming}
+              streamError={streamError}
+              streamingText={streamingText}
+            />
+          </div>
+        )}
+        <ReadingPanel
+          open={showReadingPanel && (isStreaming || !!streamingText || !!viewingStoryText)}
+          isStreaming={isStreaming}
+          text={viewingStoryText ?? streamingText}
+          title={currentStoryTitle}
+          themeInputClass={journeyPersonaTheme?.input}
+          onClose={() => { setShowReadingPanel(false); setViewingStoryText(null); }}
+        />
+      </div>
+    </div>
+  )
+}
+
+function App() {
+  return (
+    <ErrorBoundary>
+      <AppProvider>
+        <AppContent />
+      </AppProvider>
+    </ErrorBoundary>
+  )
+}
+
+export default App
+

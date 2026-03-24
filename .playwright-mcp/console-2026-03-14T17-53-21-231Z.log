@@ -1,0 +1,32 @@
+[  231159ms] [ERROR] Warning: validateDOMNesting(...): %s cannot appear as a descendant of <%s>.%s <button> button 
+    at button
+    at div
+    at button
+    at div
+    at ChoiceNode (http://localhost:3000/src/components/graph/ChoiceNode.tsx:26:30)
+    at div
+    at NodeWrapper (http://localhost:3000/node_modules/.vite/deps/reactflow.js?v=12d3c268:6255:30)
+    at div
+    at NodeRenderer (http://localhost:3000/node_modules/.vite/deps/reactflow.js?v=12d3c268:6511:115)
+    at div
+    at Viewport (http://localhost:3000/node_modules/.vite/deps/reactflow.js?v=12d3c268:6972:31)
+    at div
+    at http://localhost:3000/node_modules/.vite/deps/reactflow.js?v=12d3c268:5743:39
+    at div
+    at ZoomPane (http://localhost:3000/node_modules/.vite/deps/reactflow.js?v=12d3c268:5370:19)
+    at FlowRenderer (http://localhost:3000/node_modules/.vite/deps/reactflow.js?v=12d3c268:6448:33)
+    at GraphView (http://localhost:3000/node_modules/.vite/deps/reactflow.js?v=12d3c268:7088:20)
+    at Wrapper (http://localhost:3000/node_modules/.vite/deps/reactflow.js?v=12d3c268:7389:28)
+    at div
+    at http://localhost:3000/node_modules/.vite/deps/reactflow.js?v=12d3c268:7420:50
+    at div
+    at GraphCanvasInner (http://localhost:3000/src/components/graph/GraphView.tsx:55:3)
+    at ReactFlowProvider (http://localhost:3000/node_modules/.vite/deps/reactflow.js?v=12d3c268:7381:38)
+    at GraphView (http://localhost:3000/src/components/graph/GraphView.tsx:198:11)
+    at div
+    at div
+    at div
+    at AppContent (http://localhost:3000/src/App.tsx:34:86)
+    at AppProvider (http://localhost:3000/src/context/AppContext.tsx:29:31)
+    at ErrorBoundary (http://localhost:3000/src/components/ErrorBoundary.tsx:7:5)
+    at App @ http://localhost:3000/node_modules/.vite/deps/chunk-JHSVYIJ7.js?v=12d3c268:520

@@ -1,0 +1,95 @@
+import React, { useState } from 'react';
+import { Handle, Position, type NodeProps } from 'reactflow';
+import type { ReactFlowNodeData } from '@/types/graph.types';
+import { DEFAULT_THEME } from '@/context/AppContext';
+import { GRAPH_VISUAL_CONFIG } from '@/config/graph.config';
+import { getRingClass } from '@/utils/themeUtils';
+
+export const StoryNode: React.FC<NodeProps<ReactFlowNodeData>> = ({ data, selected }) => {
+  const theme = data.theme ?? DEFAULT_THEME;
+  const background = theme.background ?? 'bg-slate-900';
+  const accent = theme.button ?? 'bg-amber-600';
+  const inputBg = theme.input ?? 'bg-slate-800';
+  const ringClass = getRingClass(theme.ring);
+  const [imageFailed, setImageFailed] = useState(false);
+  const imageSrc = data.image_url ?? undefined;
+  const showImage = !!imageSrc && !imageFailed;
+
+  const dist = data.distanceFromCenter;
+  const rowStyle = dist != null
+    ? {
+        transform: `scale(${1 / (1 + GRAPH_VISUAL_CONFIG.rowMode.scaleFalloff * dist)})`,
+        opacity: 1 / (1 + GRAPH_VISUAL_CONFIG.rowMode.opacityFalloff * dist),
+        transition: 'transform 0.3s ease, opacity 0.3s ease',
+      }
+    : undefined;
+
+  const borderClass = selected
+    ? `ring-2 ${ringClass} shadow-lg shadow-amber-500/30 border-transparent`
+    : data.isPlaceholder ? 'border-slate-600 border-dashed' : 'border-slate-700';
+
+  return (
+    <div className="relative">
+      <Handle type="target" position={Position.Top} className="!bg-white/60" />
+      <div
+        className={`rounded-2xl border ${borderClass} ${background} text-white p-4 flex flex-col gap-3 transition-all`}
+        style={{
+          width: GRAPH_VISUAL_CONFIG.storyNode.width,
+          height: GRAPH_VISUAL_CONFIG.storyNode.height,
+          ...rowStyle,
+        }}
+      >
+        <div className="flex items-center justify-between text-xs uppercase tracking-wide text-white/80">
+          <span>Story Chapter</span>
+          {data.persona ? (
+            <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${accent} text-white`}>
+              {data.persona}
+            </span>
+          ) : null}
+        </div>
+        <div className="text-lg font-semibold line-clamp-1">{data.label}</div>
+
+        {data.isPlaceholder ? (
+          <div className="flex-1 flex flex-col items-center justify-center gap-3">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-400" />
+            <span className="text-xs text-white/50 italic">Generating story…</span>
+          </div>
+        ) : (
+          <>
+            <div className="flex-1 flex flex-col gap-2 min-h-0">
+              <div className="flex-1 overflow-y-auto text-sm text-white/80 whitespace-pre-line pr-1">
+                {data.story ? (
+                  data.story
+                ) : (
+                  <span className="italic text-white/50">Story content unavailable.</span>
+                )}
+              </div>
+              <div
+                className={`rounded-xl border ${inputBg.replace('bg-', 'border-')} overflow-hidden`}
+              >
+                <div className="w-full aspect-square">
+                  {showImage ? (
+                    <img
+                      src={imageSrc}
+                      alt={data.label}
+                      className="w-full h-full object-cover"
+                      onError={() => setImageFailed(true)}
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-xs uppercase tracking-widest text-white/40 bg-white/5 border border-dashed border-white/20 rounded-xl">
+                      No image
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="text-xs text-white/60">
+              {data.timestamp ? new Date(data.timestamp).toLocaleString() : 'Timestamp unknown'}
+            </div>
+          </>
+        )}
+      </div>
+      <Handle type="source" position={Position.Bottom} className="!bg-white/60" />
+    </div>
+  );
+};
