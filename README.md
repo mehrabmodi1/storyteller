@@ -1,218 +1,147 @@
-# Storyteller - Generative Interactive Narratives
+# Storyteller
 
-An AI-powered storytelling application that creates branching, interactive narratives from classic literature and custom text corpuses. Built with LangGraph, FastAPI, and React.
+An AI-powered interactive storytelling app that generates branching narratives from classic literature. Users guide the story through choices, building a graph of interconnected chapters — each with AI-generated text and images. Every generated chapter is history-aware: the system traces the path from root to the current node, so each story chunk reflects the user's cumulative journey and addresses their evolving interests — not just the immediate prompt.
 
-## What is Storyteller?
+![Branching story graph](docs/screenshot-graph.png)
 
-Storyteller generates unique, branching narratives where users guide the story through choices. Each story chapter is accompanied by AI-generated images in an impressionist style. The application uses RAG (Retrieval-Augmented Generation) to ground stories in source material while maintaining creative freedom.
+## Key Features
 
-**Key Features:**
-- Branching narrative graphs that grow with user choices
-- DALL-E 3 generated images for each chapter
-- Multiple text corpuses (Mahabharata, Odyssey, Arabian Nights, etc.)
-- 5 storyteller personas with unique voices
-- Save and reload story journeys
-- Real-time streaming story generation
+- **Branching narrative graphs** that grow with each user choice
+- **RAG-grounded generation** — stories are anchored in source material via hybrid retrieval (ChromaDB + BM25)
+- **DALL-E image generation** for every chapter (impressionist watercolour style)
+- **6 storyteller personas** with distinct voices and temperature settings (Grandmother, Professor, HAL 9000, Pirate, Freud, Extreme Summariser)
+- **6 text corpuses** — Mahabharata, Odyssey, Arabian Nights, Volsunga Saga, Jataka Tales, Locus Platform Docs
+- **Real-time streaming** via Server-Sent Events
+- **Save and reload journeys** per user
+- **Two visualization modes** — tree (ELK hierarchical layout) and row (horizontal scroll)
+- **Prompt guardrails** — OpenAI moderation + custom intent classifier
+
+## Tech Stack
+
+| Layer | Stack |
+|-------|-------|
+| Backend | Python 3.12, FastAPI, LangGraph, LangChain, ChromaDB, NetworkX |
+| Frontend | React 18, TypeScript, Vite, ReactFlow, Tailwind CSS, ELK.js |
+| AI | OpenAI GPT-4o-mini (text), DALL-E 2 (images), text-embedding-3-small (vectors) |
+| Data | ChromaDB (semantic search), BM25 (keyword search), file-based JSON (journeys) |
 
 ## Project Structure
 
-This is a **dual-project monorepo** with independently deployable backend and frontend:
-
 ```
 storyteller/
-├── storyteller_backend/      # Python FastAPI backend
-├── storyteller_frontend/     # React/Vite frontend (coming in Phase 2)
-├── data/                     # Shared: Vector databases, embeddings
-├── saved_graphs/             # Shared: User story journeys
-├── src/                      # Legacy code (reference only)
-└── documentation/            # Project documentation
+├── storyteller_backend/        # FastAPI backend (Python)
+│   ├── api/                    # main.py, routes/, dependencies.py
+│   ├── services/               # story_agent, auth, journey_manager, image_generator
+│   ├── models/                 # Pydantic models, LangGraph state
+│   ├── config/                 # settings.py, personas.json, jobs.yaml
+│   ├── embed_retrieve/         # Hybrid retriever (ChromaDB + BM25)
+│   ├── data/                   # corpus_registry.json
+│   └── tests/                  # pytest suite
+├── storyteller_frontend/       # React/Vite frontend (TypeScript)
+│   └── src/
+│       ├── components/         # graph/, dropdowns/, debug/
+│       ├── hooks/              # useSSE, useELKLayout, useRowLayout, useLocalStorage
+│       ├── services/           # api.ts — all backend calls
+│       ├── context/            # AppContext — global state
+│       ├── types/              # TypeScript type definitions
+│       └── utils/              # layout engines, graph transforms
+├── data/                       # ChromaDB vector databases, BM25 indexes, processed chunks
+├── saved_graphs/               # Persisted user journeys (JSON)
+├── raw_texts/                  # Source text files (PDFs and .txt)
+├── validation/                 # Behavior test manifests
+├── docs/                       # Design specs and implementation plans
+├── pyproject.toml              # Poetry dependency management
+└── CLAUDE.md                   # AI assistant guide
 ```
 
-### Backend (`storyteller_backend/`)
-- **Tech Stack:** Python 3.11+, FastAPI, LangGraph, LangChain, ChromaDB
-- **Purpose:** Story generation agent, corpus retrieval, API server
-- **Independent deployment:** Can be deployed separately to Railway, Render, etc.
-
-### Frontend (`storyteller_frontend/`) - Phase 2
-- **Tech Stack:** React 19, Vite, TypeScript, ReactFlow, Tailwind CSS
-- **Purpose:** Graph visualization, user interface
-- **Independent deployment:** Can be deployed separately to Vercel, Netlify, etc.
-
-## Quick Start
+## Quickstart
 
 ### Prerequisites
-- Python 3.11 or later
-- Node.js 18.0 or later (for frontend, Phase 2)
-- OpenAI API key ([get one here](https://platform.openai.com/api-keys))
 
-### 1. Backend Setup
+- Python 3.12+
+- Node.js 18+
+- [Poetry 2.x](https://python-poetry.org/docs/#installation)
+- An OpenAI API key ([get one here](https://platform.openai.com/api-keys))
 
-```bash
-# Navigate to backend
-cd storyteller_backend
-
-# Create virtual environment
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Configure environment
-cp .env.example .env
-# Edit .env and add your OPENAI_API_KEY
-
-# Run the server
-python -m uvicorn api.main:app --reload
-```
-
-Backend will be available at: http://localhost:8000
-
-API documentation: http://localhost:8000/docs
-
-### 2. Frontend Setup (Phase 2 - Coming Soon)
+### 1. Install dependencies
 
 ```bash
-# Navigate to frontend
-cd storyteller_frontend
+# Backend (from repo root)
+poetry install
 
-# Install dependencies
-npm install
-
-# Configure environment
-cp .env.local.example .env.local
-# Edit .env.local to set API URL
-
-# Run development server
-npm run dev
+# Frontend
+cd storyteller_frontend && npm install
 ```
 
-Frontend will be available at: http://localhost:3000
+### 2. Configure environment
+
+```bash
+# Copy the example and add your OpenAI key
+cp storyteller_backend/.env.example storyteller_backend/.env
+# Edit storyteller_backend/.env → set OPENAI_API_KEY
+```
+
+### 3. Start the servers
+
+```bash
+# Backend (port 8000)
+cd storyteller_backend && poetry run python -m api.main
+
+# Frontend (port 3000, in a separate terminal)
+cd storyteller_frontend && npm run dev
+```
+
+### 4. Verify
+
+```bash
+curl http://localhost:8000/health
+# → {"status":"healthy","api_host":"0.0.0.0","api_port":8000,"auth_mode":"self_hosted"}
+```
+
+Open http://localhost:3000 in your browser.
+
+### 5. Use the app
+
+1. Select or create a **username**
+2. Pick a **persona** and **corpus**
+3. Type an opening prompt and click **Start New Journey**
+4. Watch the story stream in, then click a **choice node** to continue
+5. Your journey is auto-saved — reload it anytime from the **Load Journey** dropdown
+
+## Validation & AI-Driven Development
+
+This project uses a behavior-driven development workflow where natural-language test manifests drive both testing and feature implementation via Claude Code.
+
+**Two test manifests** define the expected behavior of the entire app:
+
+- **[`validation/app-behaviors.md`](validation/app-behaviors.md)** — 38 end-to-end tests that a Claude Code agent executes via Playwright MCP in a headless browser (clicking, typing, screenshotting — like a real user)
+- **[`validation/BE-behaviours.md`](validation/BE-behaviours.md)** — 33 backend API tests exercised via direct HTTP calls
+
+**Two Claude Code skills** automate the loop:
+
+| Skill | Command | Purpose |
+|-------|---------|---------|
+| **test-app** | `/test-app` | Runs the full behavior suite via Playwright, produces a timestamped pass/fail report with screenshots |
+| **fix-tests** | `/fix-tests` | Reads the latest test report, implements fixes for every failure, verifies each fix, then re-runs the full suite |
+
+**The workflow for implementing new features:**
+
+1. Write a new test in the behavior manifest describing the feature as if it already exists (including `status: unimplemented`)
+2. Run `/test-app` — the new test fails as expected
+3. Run `/fix-tests` — Claude Code reads the failure, implements the feature to make the test pass, then re-runs the suite to catch regressions
+4. Repeat until all tests pass
+
+This approach has been used to build features like placeholder nodes during streaming, image generation, row mode visualization, and prompt guardrails — each started as a failing test description that Claude Code then implemented autonomously.
+
+See **[`validation/DOCUMENTATION.md`](validation/DOCUMENTATION.md)** for the full engineering reference.
 
 ## Documentation
 
-- **[MANUAL_SETUP.md](documentation/MANUAL_SETUP.md)** - Detailed setup instructions
-- **[next_steps.md](documentation/next_steps.md)** - Implementation plan and architecture decisions
-- **Backend README** - `storyteller_backend/README.md` (coming soon)
-- **Frontend README** - `storyteller_frontend/README.md` (Phase 2)
-
-## Available Corpuses
-
-The system currently includes 6 pre-processed text corpuses:
-
-1. **The Mahabharata** - Ancient Indian epic
-2. **The Odyssey** - Homer's classic Greek epic
-3. **The Arabian Nights** - Collection of Middle Eastern folk tales
-4. **The Volsunga Saga** - Norse legendary saga
-5. **The Jataka Tales** - Buddhist birth stories
-6. **Locus Platform Documentation** - Technical documentation example
-
-### Adding New Corpuses
-
-See `documentation/next_steps.md` for instructions on ingesting custom text files.
-
-## Storyteller Personas
-
-Choose from 5 distinct storyteller personalities:
-
-- **Grandmother** - Warm, nurturing, traditional storytelling
-- **Scholar** - Analytical, educational, contextual
-- **Poet** - Lyrical, metaphorical, artistic
-- **Historian** - Factual, chronological, detailed
-- **Mystic** - Spiritual, symbolic, philosophical
-
-Each persona has a unique color theme and narrative voice.
-
-## Architecture
-
-### Self-Hosted Deployment (Current - Phase 1)
-Users run both backend and frontend locally with their own OpenAI API keys.
-
-### Hybrid Deployment (Future - Phase 2+)
-- Backend deployed to cloud (Railway, Render, AWS Lambda)
-- Frontend runs locally OR deployed to Vercel/Netlify
-- Users configure frontend to point to deployed backend URL
-
-### Authentication Modes
-- **Phase 1:** Self-hosted (API key in `.env` file)
-- **Phase 2+:** Per-request key (key sent in HTTP headers)
-- **Phase 3+:** Credit system (users buy credits, platform manages OpenAI)
-
-See `documentation/next_steps.md` for detailed architecture discussion.
-
-## Testing
-
-```bash
-# Backend tests
-cd storyteller_backend
-pytest tests/ -v --cov=api --cov=services
-
-# Frontend tests (Phase 2)
-cd storyteller_frontend
-npm test
-```
-
-## Development Status
-
-### Completed (Legacy `src/` code)
-- Multi-corpus RAG system
-- LangGraph story generation agent
-- Persona system with theming
-- DALL-E 3 image generation
-- FastAPI server with SSE streaming
-- Next.js frontend with ReactFlow visualization
-
-### In Progress (Phase 1)
-- Modular backend refactoring (`storyteller_backend/`)
-- Clean service layer architecture
-- Comprehensive testing suite
-- Improved configuration management
-
-### Planned (Phase 2+)
-- Lightweight Vite + React frontend (`storyteller_frontend/`)
-- Swappable graph visualization libraries
-- Error boundaries and better error handling
-- Deployment configurations (Docker, cloud platforms)
-
-## Contributing
-
-Created by [Mehrab Modi](https://github.com/mehrabmodi)
-
-Contributions, issues, and feature requests are welcome!
+- **[Backend DOCUMENTATION.md](storyteller_backend/DOCUMENTATION.md)** — API reference, services, data models, retrieval pipeline
+- **[Frontend DOCUMENTATION.md](storyteller_frontend/DOCUMENTATION.md)** — Components, hooks, state management, layout engines
+- **[Validation DOCUMENTATION.md](validation/DOCUMENTATION.md)** — Behavior-driven test manifests, skills, and AI development workflow
+- **[CLAUDE.md](CLAUDE.md)** — AI assistant development guide
 
 ## License
 
-MIT License
-
-Copyright (c) 2025 Mehrab Modi
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-## Acknowledgments
-
-- Built with [LangGraph](https://github.com/langchain-ai/langgraph) and [LangChain](https://github.com/langchain-ai/langchain)
-- Image generation powered by [OpenAI DALL-E 3](https://openai.com/dall-e-3)
-- Graph visualization using [ReactFlow](https://reactflow.dev/)
-- Embeddings stored in [ChromaDB](https://www.trychroma.com/)
-- Layout algorithm by [ELK (Eclipse Layout Kernel)](https://www.eclipse.org/elk/)
-
----
-
-*"Story is our only boat for sailing on the river of time."* - Ursula K. Le Guin
-
+MIT License — Copyright (c) 2025 Mehrab Modi

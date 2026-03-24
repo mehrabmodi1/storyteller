@@ -251,7 +251,7 @@ stream should start and no reading panel should appear.
 
 ## 28. Trigger a stream error
 depends_on: 1
-status: unimplemented
+
 
 Attempt to start a journey with conditions that trigger a backend error
 (e.g., select an invalid corpus if possible). Expect an error message to
@@ -275,7 +275,7 @@ new nodes.
 
 ## 30. Discover and select a user from the backend
 depends_on: none
-status: unimplemented
+
 
 Open the username dropdown. Look for "Mehrab" in the list.
 
@@ -302,7 +302,7 @@ merge those usernames into the dropdown on load.
 
 ## 31. Placeholder node appears immediately when generation starts
 depends_on: 13
-status: unimplemented
+
 
 This test verifies that a placeholder story node is added to the graph
 the moment a prompt is submitted — before streaming completes — so the
@@ -345,7 +345,7 @@ updates in-place with the real content and its choice nodes.
 
 ## 32. Verify story nodes display generated images
 depends_on: 7
-status: unimplemented
+
 
 After a journey has been generated and the graph is visible, examine each
 story node. Expect every story node to display a generated image (e.g. an
@@ -373,7 +373,7 @@ need to render these images using the paths from the graph.
 
 ## 33. Toggle to Row Mode and verify leaf row
 depends_on: 16
-status: unimplemented
+
 
 After the graph has at least 3 story nodes across 2 branches (from
 test 16), find and click the mode toggle button to switch from Tree Mode
@@ -395,7 +395,7 @@ a screenshot and verify:
 
 ## 34. Press ▲ to navigate to Leaf-1 depth
 depends_on: 33
-status: unimplemented
+
 
 Click the ▲ button. Expect the depth label to change to "LEAF-1". The
 row should now show story nodes that are exactly 1 hop above at least
@@ -412,14 +412,14 @@ If the graph only has 2 depth levels, ▲ should now be disabled
 
 ## 35. Press ▼ to return to leaf row
 depends_on: 34
-status: unimplemented
+
 
 Click the ▼ button. Expect the depth label to return to "LEAF" and the
 row to show the same leaf nodes as in test 33. ▼ should now be disabled.
 
 ## 36. Click a choice node in Row Mode and generate a story
 depends_on: 35
-status: unimplemented
+
 
 In the leaf row (returned to in test 35), click a choice node below one
 of the visible story nodes to expand it. Click "Continue Journey". Wait
@@ -433,7 +433,7 @@ Verify:
 
 ## 37. Scroll horizontally to re-center a different node
 depends_on: 36
-status: unimplemented
+
 
 With 3 leaf nodes now in the row (from test 36), pan/scroll the graph
 horizontally to shift the viewport so a different story node becomes
@@ -445,7 +445,7 @@ centered. Take a screenshot and verify:
 
 ## 38. Toggle back to Tree Mode
 depends_on: 36
-status: unimplemented
+
 
 Click the mode toggle to switch back to Tree Mode. Take a screenshot
 and verify:
