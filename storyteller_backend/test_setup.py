@@ -284,7 +284,7 @@ def test_image_generator():
         generator = get_image_generator()
         assert generator is not None, "Failed to create image generator"
         assert generator.enable_generation == True, "Image generation not enabled"
-        assert generator.client is not None, "OpenAI client not initialized"
+        assert generator.api_key is not None, "API key not configured"
         
         return print_test(
             "Image Generator",
