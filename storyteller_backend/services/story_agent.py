@@ -17,7 +17,7 @@ Migrated from src/agent/graph.py
 
 from langgraph.graph import StateGraph, END
 from langchain_core.messages import HumanMessage
-from langchain_openai import ChatOpenAI
+from langchain.chat_models import init_chat_model
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableConfig
 from pydantic import BaseModel, Field
@@ -36,13 +36,13 @@ from models.api_models import PromptScreenResult
 from embed_retrieve import HybridRetriever
 from services.image_generator import ImageGenerator, resolve_image_urls
 from services.journey_manager import get_journey_manager
-ACTIVE_OPENAI_API_KEY = settings.openai_api_key
+ACTIVE_API_KEY = settings.api_key
 
 
 def _set_active_api_key(override: Optional[str] = None) -> None:
-    """Update the module-level API key used for ChatOpenAI instances."""
-    global ACTIVE_OPENAI_API_KEY
-    ACTIVE_OPENAI_API_KEY = settings.resolve_openai_key(override)
+    """Update the module-level API key used for LLM instances."""
+    global ACTIVE_API_KEY
+    ACTIVE_API_KEY = settings.resolve_api_key(override)
 
 
 
@@ -155,9 +155,10 @@ async def _generate_node_summary(story: str, prompt: str, api_key: str) -> str:
     Returns empty string on any failure — summary is non-critical.
     """
     try:
-        summary_llm = ChatOpenAI(
+        summary_llm = init_chat_model(
+            settings.chat_model,
+            model_provider=settings.langchain_chat_provider,
             temperature=0,
-            model_name=settings.summary_model,
             api_key=api_key,
         )
         system = (
@@ -185,6 +186,8 @@ async def _check_moderation(prompt: str, api_key: str) -> bool:
     Returns False if flagged or if the moderation API is unavailable.
     Fails closed: uncertain prompts are rejected.
     """
+    if settings.provider != "openai":
+        return True
     try:
         client = AsyncOpenAI(api_key=api_key)
         result = await client.moderations.create(input=prompt)
@@ -222,9 +225,10 @@ async def _classify_intent(prompt: str, corpus_name: str, api_key: str) -> Promp
     Fails closed: returns fail verdict on any error.
     """
     try:
-        classifier_llm = ChatOpenAI(
+        classifier_llm = init_chat_model(
+            settings.chat_model,
+            model_provider=settings.langchain_chat_provider,
             temperature=0,
-            model_name=settings.guardrail_model,
             api_key=api_key,
         ).with_structured_output(PromptScreenResult)
 
@@ -250,7 +254,7 @@ async def screen_prompt(state: StorytellerState) -> Dict[str, Any]:
     print(f"--- Node: screen_prompt @ {datetime.now()} ---")
     prompt = state['messages'][-1].content
     corpus_name = state.get('corpus_name') or 'mahabharata'
-    api_key = ACTIVE_OPENAI_API_KEY
+    api_key = ACTIVE_API_KEY
 
     moderation_ok, classifier_result = await asyncio.gather(
         _check_moderation(prompt, api_key),
@@ -292,10 +296,11 @@ def generate_search_query(state: StorytellerState) -> Dict[str, Any]:
         ("user", "{input}")
     ])
     
-    llm_for_query = ChatOpenAI(
-        temperature=0, 
-        model_name=settings.chat_model,
-        api_key=ACTIVE_OPENAI_API_KEY,
+    llm_for_query = init_chat_model(
+        settings.chat_model,
+        model_provider=settings.langchain_chat_provider,
+        temperature=0,
+        api_key=ACTIVE_API_KEY,
     ).with_structured_output(SearchQuery)
 
     query_generation_chain = prompt | llm_for_query
@@ -427,11 +432,12 @@ You must explicitly reference how the current chapter connects to the previous c
         ("user", "{input}")
     ])
 
-    story_llm = ChatOpenAI(
+    story_llm = init_chat_model(
+        settings.chat_model,
+        model_provider=settings.langchain_chat_provider,
         temperature=0.9,
-        model_name=settings.chat_model,
         streaming=True,
-        api_key=ACTIVE_OPENAI_API_KEY,
+        api_key=ACTIVE_API_KEY,
         max_tokens=token_ceiling,
     )
 
@@ -524,7 +530,7 @@ async def update_graph_with_story(state: StorytellerState) -> Dict[str, Any]:
     # Generate a summary of this chapter and await it before graph save.
     # This is a direct await (not create_task) since there is no concurrent
     # work to overlap with inside this node.
-    summary = await _generate_node_summary(story, last_message, ACTIVE_OPENAI_API_KEY)
+    summary = await _generate_node_summary(story, last_message, ACTIVE_API_KEY)
     graph.nodes[story_node_id]['summary'] = summary
     print(f"Generated summary for node {story_node_id}: {summary[:60]}...")
 
@@ -589,10 +595,11 @@ def generate_choices(state: StorytellerState) -> Dict[str, Any]:
         ("user", "Please generate three follow-up choices.")
     ])
 
-    choices_llm = ChatOpenAI(
+    choices_llm = init_chat_model(
+        settings.chat_model,
+        model_provider=settings.langchain_chat_provider,
         temperature=0.7,
-        model_name=settings.chat_model,
-        api_key=ACTIVE_OPENAI_API_KEY,
+        api_key=ACTIVE_API_KEY,
     ).with_structured_output(Choices)
 
     choice_generation_chain = prompt | choices_llm
@@ -719,7 +726,7 @@ def get_story_agent(api_key: Optional[str] = None):
         Compiled LangGraph story agent
     """
     global _story_agent, _story_agent_api_key
-    resolved_key = settings.resolve_openai_key(api_key)
+    resolved_key = settings.resolve_api_key(api_key)
     if _story_agent is None or _story_agent_api_key != resolved_key:
         _story_agent = create_story_agent(resolved_key)
         _story_agent_api_key = resolved_key

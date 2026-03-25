@@ -17,7 +17,9 @@ class TestCheckModeration:
         mock_result = MagicMock()
         mock_result.results = [MagicMock(flagged=False)]
 
-        with patch("services.story_agent.AsyncOpenAI") as MockClient:
+        with patch("services.story_agent.settings") as mock_settings, \
+             patch("services.story_agent.AsyncOpenAI") as MockClient:
+            mock_settings.provider = "openai"
             MockClient.return_value.moderations.create = AsyncMock(return_value=mock_result)
             result = await _check_moderation("Tell me about Arjuna", "test-key")
 
@@ -28,17 +30,26 @@ class TestCheckModeration:
         mock_result = MagicMock()
         mock_result.results = [MagicMock(flagged=True)]
 
-        with patch("services.story_agent.AsyncOpenAI") as MockClient:
+        with patch("services.story_agent.settings") as mock_settings, \
+             patch("services.story_agent.AsyncOpenAI") as MockClient:
+            mock_settings.provider = "openai"
             MockClient.return_value.moderations.create = AsyncMock(return_value=mock_result)
             result = await _check_moderation("harmful content", "test-key")
 
         assert result is False
 
+    @pytest.mark.asyncio
+    async def test_skips_moderation_for_non_openai_provider(self):
+        with patch("services.story_agent.settings") as mock_settings:
+            mock_settings.provider = "gemini"
+            result = await _check_moderation("any prompt", "test-key")
+        assert result is True
+
 
 class TestClassifyIntent:
-    # _classify_intent calls ChatOpenAI(...).with_structured_output(PromptScreenResult)
+    # _classify_intent calls init_chat_model(...).with_structured_output(PromptScreenResult)
     # then awaits .ainvoke() on the resulting chain. We must mock the full chain:
-    # ChatOpenAI() -> mock_llm; mock_llm.with_structured_output() -> mock_chain;
+    # init_chat_model() -> mock_llm; mock_llm.with_structured_output() -> mock_chain;
     # mock_chain.ainvoke() -> result.
 
     @pytest.mark.asyncio
@@ -50,7 +61,7 @@ class TestClassifyIntent:
         mock_llm = MagicMock()
         mock_llm.with_structured_output = MagicMock(return_value=mock_chain)
 
-        with patch("services.story_agent.ChatOpenAI", return_value=mock_llm):
+        with patch("services.story_agent.init_chat_model", return_value=mock_llm):
             result = await _classify_intent(
                 "Tell me about Karna's moral failings", "mahabharata", "test-key"
             )
@@ -66,7 +77,7 @@ class TestClassifyIntent:
         mock_llm = MagicMock()
         mock_llm.with_structured_output = MagicMock(return_value=mock_chain)
 
-        with patch("services.story_agent.ChatOpenAI", return_value=mock_llm):
+        with patch("services.story_agent.init_chat_model", return_value=mock_llm):
             result = await _classify_intent(
                 "Make Draupadi look stupid", "mahabharata", "test-key"
             )
