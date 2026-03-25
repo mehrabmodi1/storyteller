@@ -2,20 +2,20 @@
 Image Generator Service
 
 Handles AI image generation for story chapters:
-- Creates descriptive prompts with GPT-4o-mini
-- Generates images with DALL-E
-
-Migrated from src/agent/graph.py (generate_image_for_story function)
+- Creates descriptive prompts via init_chat_model (provider-agnostic)
+- Generates images with DALL-E (OpenAI) or Gemini
 """
 
 from typing import Optional, Tuple, Union
 from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
+import asyncio
 import base64
 
+from langchain.chat_models import init_chat_model
+
 from config.settings import settings
-from services.auth_service import get_async_openai_client
 
 
 STYLE_PREFIX = (
@@ -27,33 +27,27 @@ STYLE_PREFIX = (
 class ImageGenerator:
     """
     Generates images for story chapters using an image gen model.
-    
+
     The service creates high-quality image prompts based on story text,
     then generates images that maintain visual continuity across a journey.
     """
-    
+
     def __init__(self, api_key: Optional[str] = None):
-        """
-        Initialize the image generator.
-        
-        Args:
-            api_key: Optional API key for per-request authentication
-        """
-        self.client = get_async_openai_client(api_key)
-        self.enable_generation = True  # Could be made configurable
-    
+        self.api_key = settings.resolve_api_key(api_key)
+        self.enable_generation = True
+
     async def _generate_image_prompt(
         self,
         story_text: str,
         parent_image_prompt: Optional[str] = None
     ) -> Optional[str]:
         """
-        Generate a descriptive image prompt from story text using GPT-4o-mini.
-        
+        Generate a descriptive image prompt from story text using init_chat_model.
+
         Args:
             story_text: The story chapter text
             parent_image_prompt: Optional previous image prompt for continuity
-        
+
         Returns:
             Generated image prompt, or None if generation fails
         """
@@ -63,31 +57,58 @@ You MUST include at least one main character from the passage — name them and 
 Focus on: that character in their setting, the dominant mood, and one central action or moment.
 Do NOT include any style, artistic, or colour instructions — those are handled separately.
 Do NOT include any text, labels, or captions in your description."""
-        
+
         if parent_image_prompt:
             system_content += f"\n\nMaintain visual continuity with the previous image, which was described as: '{parent_image_prompt}'. Ensure characters and locations look consistent, while adhering to the specified artistic style."
-        
-        messages = [
-            {"role": "system", "content": system_content},
-            {"role": "user", "content": story_text}
-        ]
-        
+
         try:
-            response = await self.client.chat.completions.create(
-                model=settings.chat_model,
-                messages=messages,
+            llm = init_chat_model(
+                settings.chat_model,
+                model_provider=settings.langchain_chat_provider,
+                temperature=0,
+                api_key=self.api_key,
                 max_tokens=250,
             )
-            
-            image_prompt = response.choices[0].message.content
+            messages = [("system", system_content), ("user", story_text)]
+            response = await llm.ainvoke(messages)
+
+            image_prompt = response.content
             print(f"Generated Image Prompt: {image_prompt}")
             return image_prompt
-            
+
         except Exception as e:
             print(f"Error generating image prompt: {e}")
             return None
-    
-    async def _generate_dalle_image(self, image_prompt: str) -> Union[Optional[str], Optional[bytes]]:
+
+    async def _generate_image(self, image_prompt: str) -> Optional[Union[str, bytes]]:
+        """Route image generation to the appropriate provider."""
+        if settings.provider == "gemini":
+            return await self._generate_gemini_image(image_prompt)
+        else:
+            return await self._generate_dalle_image(image_prompt)
+
+    async def _generate_gemini_image(self, image_prompt: str) -> Optional[bytes]:
+        """Generate an image using Gemini's native image generation."""
+        try:
+            from google import genai
+            from google.genai import types
+            client = genai.Client(api_key=self.api_key)
+            response = await asyncio.to_thread(
+                client.models.generate_content,
+                model=settings.image_model,
+                contents=STYLE_PREFIX + image_prompt,
+                config=types.GenerateContentConfig(response_modalities=["IMAGE"]),
+            )
+            if (response.candidates and response.candidates[0].content and response.candidates[0].content.parts):
+                for part in response.candidates[0].content.parts:
+                    if part.inline_data:
+                        return part.inline_data.data
+            return None
+        except Exception as e:
+            print(f"Error generating Gemini image: {e}")
+            return None
+
+    async def _generate_dalle_image(self, image_prompt: str) -> Optional[Union[str, bytes]]:
         """
         Generate an image using DALL-E.
 
@@ -95,28 +116,26 @@ Do NOT include any text, labels, or captions in your description."""
         Otherwise returns the temporary blob URL.
         """
         try:
+            from openai import AsyncOpenAI
+            client = AsyncOpenAI(api_key=self.api_key)
             use_b64 = settings.local_image_storage
-            response = await self.client.images.generate(
+            response = await client.images.generate(
                 model=settings.image_model,
                 prompt=STYLE_PREFIX + image_prompt,
                 n=1,
-                size=settings.image_generation_size,
+                size=settings.image_size,
                 response_format="b64_json" if use_b64 else "url",
             )
 
             if use_b64:
-                image_bytes = base64.b64decode(response.data[0].b64_json)
-                print(f"Generated image ({len(image_bytes)} bytes)")
-                return image_bytes
+                return base64.b64decode(response.data[0].b64_json)
             else:
-                image_url = response.data[0].url
-                print(f"Generated Image URL: {image_url}")
-                return image_url
+                return response.data[0].url
 
         except Exception as e:
             print(f"Error generating DALL-E image: {e}")
             return None
-    
+
     def _save_image_locally(self, image_bytes: bytes) -> Optional[str]:
         """
         Save raw image bytes to saved_graphs/images/{uuid}.png.
@@ -177,20 +196,20 @@ Do NOT include any text, labels, or captions in your description."""
             if not image_prompt:
                 return None, None
 
-            result = await self._generate_dalle_image(image_prompt)
+            result = await self._generate_image(image_prompt)
             if not result:
                 return None, image_prompt
 
-            if settings.local_image_storage:
-                image_id = self._save_image_locally(result)  # result is bytes
+            if isinstance(result, bytes):
+                image_id = self._save_image_locally(result)
                 return image_id, image_prompt
 
-            return result, image_prompt  # result is URL string
+            return result, image_prompt  # URL string from DALL-E
 
         except Exception as e:
             print(f"An error occurred during image generation: {e}")
             return None, None
-    
+
 
 def resolve_image_urls(serializable_graph: dict) -> dict:
     """
@@ -217,10 +236,10 @@ _image_generator: Optional[ImageGenerator] = None
 def get_image_generator(api_key: Optional[str] = None) -> ImageGenerator:
     """
     Get the global image generator instance.
-    
+
     Args:
         api_key: Optional API key for per-request authentication
-    
+
     Returns:
         ImageGenerator instance
     """
@@ -228,4 +247,3 @@ def get_image_generator(api_key: Optional[str] = None) -> ImageGenerator:
     if _image_generator is None or api_key is not None:
         _image_generator = ImageGenerator(api_key)
     return _image_generator
-
