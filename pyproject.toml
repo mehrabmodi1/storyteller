@@ -23,6 +23,8 @@ chromadb = "1.3.7"
 rank-bm25 = "0.2.2"
 networkx = "3.4.2"
 onnxruntime = ">=1.23.0,<1.24"  # pin: 1.24+ lacks macOS arm64 wheels
+langchain-google-genai = ">=2.0,<2.1"
+google-genai = "^1.68.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "8.3.4"
