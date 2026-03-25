@@ -1,6 +1,5 @@
 import fitz  # PyMuPDF
 import tiktoken
-import openai
 import os
 from typing import List, Optional
 import chromadb
@@ -9,6 +8,9 @@ from tqdm import tqdm
 import pickle
 from rank_bm25 import BM25Okapi
 import argparse
+
+from langchain.chat_models import init_chat_model
+from langchain.embeddings import init_embeddings
 
 # Assuming config.py is in the same directory
 from . import config
@@ -26,20 +28,41 @@ class HybridRetrieverBuilder:
 
     def __init__(self, pdf_path: str, api_key: Optional[str] = None):
         """
-        Initializes the builder and sets up the OpenAI client.
+        Initializes the builder and sets up the embeddings model.
 
         Args:
             pdf_path: The path to the source PDF file.
         """
-        self.api_key = settings.resolve_openai_key(api_key)
-        self.openai_client = openai.OpenAI(api_key=self.api_key)
+        self.api_key = settings.resolve_api_key(api_key)
         self.pdf_path = pdf_path
-        
+
+        try:
+            self.embeddings = init_embeddings(
+                settings.embedding_model,
+                provider=settings.langchain_embeddings_provider,
+                api_key=self.api_key,
+            )
+        except Exception:
+            if settings.provider == "gemini":
+                from langchain_google_genai import GoogleGenerativeAIEmbeddings
+                self.embeddings = GoogleGenerativeAIEmbeddings(
+                    model=settings.embedding_model,
+                    google_api_key=self.api_key,
+                )
+            else:
+                from langchain_openai import OpenAIEmbeddings
+                self.embeddings = OpenAIEmbeddings(
+                    model=settings.embedding_model,
+                    api_key=self.api_key,
+                )
+
         # Use the standard tokenizer for OpenAI's text-embedding models
         self.tokenizer = tiktoken.get_encoding("cl100k_base")
-        
+
         # Initialize ChromaDB client
-        self.chroma_client = chromadb.PersistentClient(path=config.CHROMA_DB_PATH)
+        chroma_path = config.get_chroma_db_path()
+        os.makedirs(chroma_path, exist_ok=True)
+        self.chroma_client = chromadb.PersistentClient(path=chroma_path)
         self.chroma_collection = self.chroma_client.get_or_create_collection(
             name=config.CHROMA_COLLECTION_NAME
         )
@@ -52,7 +75,7 @@ class HybridRetrieverBuilder:
         Loads text from the specified PDF file and tokenizes it.
         """
         print(f"Loading and tokenizing text from '{self.pdf_path}'...")
-        
+
         raw_text = ""
         try:
             with fitz.open(self.pdf_path) as doc:
@@ -76,23 +99,23 @@ class HybridRetrieverBuilder:
             return
 
         step_size = config.CHUNK_SIZE - config.CHUNK_OVERLAP
-        
+
         for i in range(0, len(self.tokens), step_size):
             chunk_tokens = self.tokens[i:i + config.CHUNK_SIZE]
-            
+
             if len(chunk_tokens) < config.CHUNK_OVERLAP:
                  continue
 
             chunk_text = self.tokenizer.decode(chunk_tokens)
-            
+
             position = DocumentPosition(
                 start_token_index=i,
                 end_token_index=i + len(chunk_tokens)
             )
-            
+
             chunk_obj = Chunk(base_text=chunk_text, document_position=position)
             self.chunks.append(chunk_obj)
-        
+
         print(f"Created {len(self.chunks)} initial chunks.")
 
     def _get_contextual_summary(self, chunk: Chunk) -> str:
@@ -101,34 +124,32 @@ class HybridRetrieverBuilder:
         """
         start = max(0, chunk.document_position.start_token_index - (config.CONTEXT_WINDOW_SIZE // 2))
         end = min(len(self.tokens), chunk.document_position.end_token_index + (config.CONTEXT_WINDOW_SIZE // 2))
-        
+
         context_tokens = self.tokens[start:end]
         context_text = self.tokenizer.decode(context_tokens)
 
         try:
-            response = self.openai_client.chat.completions.create(
-                model=config.CONTEXT_MODEL,
-                messages=[
-                    {"role": "system", "content": "You are a helpful assistant. Summarize the following text in about 200 tokens, focusing on the main characters, events, and themes."},
-                    {"role": "user", "content": context_text}
-                ],
+            llm = init_chat_model(
+                settings.chat_model,
+                model_provider=settings.langchain_chat_provider,
+                api_key=self.api_key,
                 max_tokens=config.CONTEXT_SUMMARY_TOKENS,
             )
-            return response.choices[0].message.content or ""
+            response = llm.invoke([
+                ("system", "You are a helpful assistant. Summarize the following text in about 200 tokens, focusing on the main characters, events, and themes."),
+                ("user", context_text),
+            ])
+            return response.content or ""
         except Exception as e:
             print(f"Error generating summary for chunk {chunk.chunk_id}: {e}")
             return ""
 
     def _get_embedding(self, text: str) -> List[float]:
         """
-        Generates an embedding for a given text using an OpenAI embedding model.
+        Generates an embedding for a given text using the configured embeddings model.
         """
         try:
-            response = self.openai_client.embeddings.create(
-                model=config.EMBEDDING_MODEL,
-                input=text
-            )
-            return response.data[0].embedding
+            return self.embeddings.embed_query(text)
         except Exception as e:
             print(f"Error generating embedding: {e}")
             return []
@@ -153,15 +174,22 @@ class HybridRetrieverBuilder:
                     chunk.context = data['context']
                     chunk.embedding = data['embedding']
                     chunk.embedding_model = data['embedding_model']
+                if chunk.embedding_model != settings.embedding_model:
+                    tqdm.write(f"Re-embedding chunk {chunk.chunk_id[:8]} (model mismatch: {chunk.embedding_model} != {settings.embedding_model})")
+                    document_to_embed = f"Context: {chunk.context}\n\nText: {chunk.base_text}"
+                    chunk.embedding = self._get_embedding(document_to_embed)
+                    chunk.embedding_model = settings.embedding_model
+                    with open(cache_path, 'w') as f:
+                        json.dump(chunk.model_dump(), f, indent=2)
             else:
                 # Process and save to cache
                 tqdm.write(f"Cache MISS for chunk ID: {chunk.chunk_id[:8]}... Processing now.")
                 chunk.context = self._get_contextual_summary(chunk)
-                
+
                 document_to_embed = f"Context: {chunk.context}\n\nText: {chunk.base_text}"
                 chunk.embedding = self._get_embedding(document_to_embed)
-                chunk.embedding_model = config.EMBEDDING_MODEL
-                
+                chunk.embedding_model = settings.embedding_model
+
                 with open(cache_path, 'w') as f:
                     json.dump(chunk.model_dump(), f, indent=2)
 
@@ -173,7 +201,7 @@ class HybridRetrieverBuilder:
                     documents=[f"Context: {chunk.context}\n\nText: {chunk.base_text}"],
                     metadatas=[{"base_text": chunk.base_text, **chunk.document_position.model_dump()}]
                 )
-        
+
         print("\nVectorDB processing complete.")
         self._build_bm25_index()
         print("Hybrid retriever build process finished.")
@@ -187,7 +215,7 @@ class HybridRetrieverBuilder:
 
         corpus = []
         chunk_ids = []
-        
+
         if not os.path.exists(config.CACHE_DIR):
             print(f"Cache directory not found at {config.CACHE_DIR}. Aborting.")
             return
@@ -213,7 +241,7 @@ class HybridRetrieverBuilder:
         # Save the model and the chunk_id mapping
         with open(config.BM25_INDEX_PATH, "wb") as f:
             pickle.dump({"model": bm25, "chunk_ids": chunk_ids}, f)
-        
+
         print(f"BM25 index built with {len(chunk_ids)} documents and saved to {config.BM25_INDEX_PATH}")
 
 
@@ -238,5 +266,3 @@ if __name__ == '__main__':
         builder = HybridRetrieverBuilder(pdf_path=config.PDF_PATH)
         builder.build()
         print("--- Build Process Complete ---")
-
-
