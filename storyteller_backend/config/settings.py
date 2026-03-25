@@ -2,7 +2,7 @@
 Storyteller Backend Configuration
 
 1. Secrets: Loaded from .env file (API keys, connection strings)
-2. Configuration: specified in this file 
+2. Configuration: specified in this file
 """
 
 from pydantic_settings import BaseSettings
@@ -23,13 +23,14 @@ class Secrets(BaseSettings):
     Secrets that must be provided via .env file.
     These are the ONLY values loaded from environment variables.
     """
-    
-    # REQUIRED
-    openai_api_key: str
-    
+
+    # Provider API keys (at least one required, depending on provider)
+    gemini_api_key: Optional[str] = None
+    openai_api_key: Optional[str] = None
+
     # OPTIONAL
     platform_openai_key: Optional[str] = None  # For credit_system mode (Phase 3+)
-    
+
     model_config = {
         "env_file": str(ENV_FILE_PATH),
         "env_file_encoding": "utf-8",
@@ -47,32 +48,41 @@ class Config:
     Application configuration with hardcoded defaults.
     These values are NOT loaded from environment variables.
     """
-    
+
     # API Server
     api_host: str = "0.0.0.0"
     api_port: int = 8000
     api_reload: bool = True
-    
+
+    # Active provider
+    provider: Literal["gemini", "openai"] = "gemini"
+
+    # Gemini Models
+    gemini_chat_model: str = "gemini-2.5-flash"
+    gemini_embedding_model: str = "gemini-embedding-001"
+    gemini_image_model: str = "gemini-2.5-flash-image"
+    gemini_image_size: str = "1K"
+
     # OpenAI Models
-    embedding_model: str = "text-embedding-3-small"
-    chat_model: str = "gpt-4o-mini"
-    image_model: str = "dall-e-2"
-    image_generation_size: str = "256x256"
-    image_generation_quality: str = "standard"
-    
+    openai_chat_model: str = "gpt-4o-mini"
+    openai_embedding_model: str = "text-embedding-3-small"
+    openai_image_model: str = "dall-e-2"
+    openai_image_size: str = "256x256"
+    openai_image_quality: str = "standard"
+
     # Data Paths (relative to storyteller_backend/)
     data_dir: str = "../data"
     saved_graphs_dir: str = "../saved_graphs"
     personas_file: str = "config/personas.json"
-    
+
     # CORS
     cors_origins: List[str] = ["http://localhost:3000", "http://localhost:5173"]
-    
+
     # Retrieval
     retrieval_top_k: int = 10
     bm25_weight: float = 0.5
     semantic_weight: float = 0.5
-    
+
     # Story Generation
     default_paragraph_count: int = 4
     min_paragraph_count: int = 1
@@ -80,10 +90,6 @@ class Config:
     words_per_paragraph: int = 200        # Used in prompt instruction
     max_tokens_per_paragraph: int = 300   # Used for max_tokens ceiling
 
-    # LLM Model Names
-    summary_model: str = "gpt-4o-mini"
-    guardrail_model: str = "gpt-4o-mini"
-    
     # Authentication
     auth_mode: Literal["self_hosted", "per_request_key", "credit_system"] = "self_hosted"
 
@@ -93,104 +99,164 @@ class Config:
 
 
 # ============================================
+# PROVIDER MAPPINGS
+# ============================================
+
+_LANGCHAIN_CHAT_PROVIDER = {
+    "gemini": "google_genai",
+    "openai": "openai",
+}
+
+_LANGCHAIN_EMBEDDINGS_PROVIDER = {
+    "gemini": "google_genai",
+    "openai": "openai",
+}
+
+
+# ============================================
 # COMBINED SETTINGS
 # ============================================
 
 class Settings:
     """
     Combined settings object with both secrets and configuration.
-    
+
     Usage:
         from config.settings import settings
-        settings.openai_api_key  # From .env
-        settings.chat_model      # Hardcoded
+        settings.api_key        # Active provider's key
+        settings.chat_model     # Resolved for active provider
     """
-    
+
     def __init__(self):
         self._secrets = Secrets()
         self._config = Config()
-    
+        self.__validate_api_key()
+
+    def __validate_api_key(self):
+        """Raise ValueError if the active provider's API key is missing."""
+        provider = self._config.provider
+        if provider == "gemini" and not self._secrets.gemini_api_key:
+            raise ValueError(
+                "GEMINI_API_KEY is required when provider is 'gemini'. "
+                "Set it in your .env file."
+            )
+        if provider == "openai" and not self._secrets.openai_api_key:
+            raise ValueError(
+                "OPENAI_API_KEY is required when provider is 'openai'. "
+                "Set it in your .env file."
+            )
+
     # ============================================
-    # Secrets (from .env)
+    # Provider resolution
     # ============================================
     @property
-    def openai_api_key(self) -> str:
+    def provider(self) -> str:
+        return self._config.provider
+
+    @property
+    def langchain_chat_provider(self) -> str:
+        return _LANGCHAIN_CHAT_PROVIDER[self._config.provider]
+
+    @property
+    def langchain_embeddings_provider(self) -> str:
+        return _LANGCHAIN_EMBEDDINGS_PROVIDER[self._config.provider]
+
+    # ============================================
+    # Model resolution (based on active provider)
+    # ============================================
+    @property
+    def chat_model(self) -> str:
+        p = self._config.provider
+        return self._config.gemini_chat_model if p == "gemini" else self._config.openai_chat_model
+
+    @property
+    def embedding_model(self) -> str:
+        p = self._config.provider
+        return self._config.gemini_embedding_model if p == "gemini" else self._config.openai_embedding_model
+
+    @property
+    def image_model(self) -> str:
+        p = self._config.provider
+        return self._config.gemini_image_model if p == "gemini" else self._config.openai_image_model
+
+    @property
+    def image_size(self) -> str:
+        p = self._config.provider
+        return self._config.gemini_image_size if p == "gemini" else self._config.openai_image_size
+
+    @property
+    def image_quality(self) -> str:
+        return self._config.openai_image_quality
+
+    # ============================================
+    # API Keys
+    # ============================================
+    @property
+    def api_key(self) -> str:
+        """Return the active provider's API key."""
+        if self._config.provider == "gemini":
+            return self._secrets.gemini_api_key
         return self._secrets.openai_api_key
-    
-    def resolve_openai_key(self, override: Optional[str] = None) -> str:
+
+    def resolve_api_key(self, override: Optional[str] = None) -> str:
         """
-        Return an OpenAI API key, defaulting to the configured secret.
+        Return an API key, defaulting to the active provider's configured key.
         Allows override for per-request credentials.
         """
-        return override or self.openai_api_key
-    
+        return override or self.api_key
+
+    @property
+    def openai_api_key(self) -> Optional[str]:
+        """Direct access to OpenAI key (needed for moderation regardless of provider)."""
+        return self._secrets.openai_api_key
+
     @property
     def platform_openai_key(self) -> Optional[str]:
         return self._secrets.platform_openai_key
-    
+
     # ============================================
     # Configuration (hardcoded)
     # ============================================
     @property
     def api_host(self) -> str:
         return self._config.api_host
-    
+
     @property
     def api_port(self) -> int:
         return self._config.api_port
-    
+
     @property
     def api_reload(self) -> bool:
         return self._config.api_reload
-    
-    @property
-    def embedding_model(self) -> str:
-        return self._config.embedding_model
-    
-    @property
-    def chat_model(self) -> str:
-        return self._config.chat_model
-    
-    @property
-    def image_model(self) -> str:
-        return self._config.image_model
-    
-    @property
-    def image_generation_size(self) -> str:
-        return self._config.image_generation_size
-    
-    @property
-    def image_generation_quality(self) -> str:
-        return self._config.image_generation_quality
-    
+
     @property
     def data_dir(self) -> str:
         return self._config.data_dir
-    
+
     @property
     def saved_graphs_dir(self) -> str:
         return self._config.saved_graphs_dir
-    
+
     @property
     def personas_file(self) -> str:
         return self._config.personas_file
-    
+
     @property
     def cors_origins(self) -> List[str]:
         return self._config.cors_origins
-    
+
     @property
     def retrieval_top_k(self) -> int:
         return self._config.retrieval_top_k
-    
+
     @property
     def bm25_weight(self) -> float:
         return self._config.bm25_weight
-    
+
     @property
     def semantic_weight(self) -> float:
         return self._config.semantic_weight
-    
+
     @property
     def default_paragraph_count(self) -> int:
         return self._config.default_paragraph_count
@@ -210,14 +276,6 @@ class Settings:
     @property
     def max_tokens_per_paragraph(self) -> int:
         return self._config.max_tokens_per_paragraph
-
-    @property
-    def summary_model(self) -> str:
-        return self._config.summary_model
-
-    @property
-    def guardrail_model(self) -> str:
-        return self._config.guardrail_model
 
     @property
     def auth_mode(self) -> Literal["self_hosted", "per_request_key", "credit_system"]:
