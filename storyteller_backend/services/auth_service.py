@@ -43,7 +43,13 @@ class AuthService:
         if self.auth_mode == "self_hosted":
             # Phase 1: Use API key from settings
             if self._default_client is None:
-                self._default_client = OpenAI(api_key=settings.openai_api_key)
+                api_key_val = settings.openai_api_key
+                if not api_key_val:
+                    raise ValueError(
+                        "OpenAI client requested but no OPENAI_API_KEY configured. "
+                        "Set provider=openai in settings.py or provide an API key."
+                    )
+                self._default_client = OpenAI(api_key=api_key_val)
             return self._default_client
         
         elif self.auth_mode == "per_request_key":
@@ -86,7 +92,13 @@ class AuthService:
         if self.auth_mode == "self_hosted":
             # Phase 1: Use API key from settings
             if self._default_async_client is None:
-                self._default_async_client = AsyncOpenAI(api_key=settings.openai_api_key)
+                api_key_val = settings.openai_api_key
+                if not api_key_val:
+                    raise ValueError(
+                        "Async OpenAI client requested but no OPENAI_API_KEY configured. "
+                        "Set provider=openai in settings.py or provide an API key."
+                    )
+                self._default_async_client = AsyncOpenAI(api_key=api_key_val)
             return self._default_async_client
         
         elif self.auth_mode == "per_request_key":

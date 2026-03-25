@@ -195,7 +195,9 @@ class CorpusRegistry:
         
         # Check if ChromaDB collection exists
         try:
-            chroma_client = chromadb.PersistentClient(path=corpus_config.chroma_db_path)
+            from config.settings import settings
+            chroma_path = f"{corpus_config.chroma_db_path}_{settings.provider}"
+            chroma_client = chromadb.PersistentClient(path=chroma_path)
             collections = chroma_client.list_collections()
             chroma_exists = any(col.name == corpus_config.collection_name for col in collections)
         except Exception:
