@@ -63,7 +63,25 @@ storyteller/
 - [Poetry 2.x](https://python-poetry.org/docs/#installation)
 - An OpenAI API key ([get one here](https://platform.openai.com/api-keys))
 
-### 1. Install dependencies
+### 1. Download embedding data
+
+The pre-built vector databases and search indexes (~410MB) are hosted on Google Drive:
+
+**[Download data folder](https://drive.google.com/drive/folders/1iidSrv-En0VMZSNoDGswP1G_Tm3Amstw?usp=sharing)**
+
+Download all contents and place them in a `data/` directory at the repository root:
+
+```
+storyteller/
+└── data/
+    ├── chroma_db/           # ChromaDB vector embeddings (per corpus)
+    ├── bm25_indexes/        # BM25 keyword search indexes (per corpus)
+    └── corpus_registry.json # Corpus configuration
+```
+
+The app will not start without this data.
+
+### 2. Install dependencies
 
 ```bash
 # Backend (from repo root)
@@ -73,7 +91,7 @@ poetry install
 cd storyteller_frontend && npm install
 ```
 
-### 2. Configure environment
+### 3. Configure environment
 
 ```bash
 # Copy the example and add your OpenAI key
@@ -81,7 +99,7 @@ cp storyteller_backend/.env.example storyteller_backend/.env
 # Edit storyteller_backend/.env → set OPENAI_API_KEY
 ```
 
-### 3. Start the servers
+### 4. Start the servers
 
 ```bash
 # Backend (port 8000)
@@ -91,7 +109,7 @@ cd storyteller_backend && poetry run python -m api.main
 cd storyteller_frontend && npm run dev
 ```
 
-### 4. Verify
+### 5. Verify
 
 ```bash
 curl http://localhost:8000/health
@@ -100,7 +118,7 @@ curl http://localhost:8000/health
 
 Open http://localhost:3000 in your browser.
 
-### 5. Use the app
+### 6. Use the app
 
 1. Select or create a **username**
 2. Pick a **persona** and **corpus**
@@ -144,4 +162,4 @@ See **[`validation/DOCUMENTATION.md`](validation/DOCUMENTATION.md)** for the ful
 
 ## License
 
-MIT License — Copyright (c) 2025 Mehrab Modi
+MIT License — Copyright (c) 2025 Mehrab Modi, mehrabmodi@gmail.com
