@@ -63,13 +63,17 @@ storyteller/
 ├── storyteller_frontend/   # React/Vite app
 │   └── src/
 │       ├── components/     # graph/, dropdowns/, debug/
-│       ├── hooks/          # useSSE, useELKLayout, useLocalStorage
+│       ├── hooks/          # useSSE, useELKLayout, useRowLayout, useLocalStorage
 │       ├── services/       # api.ts — all backend calls
-│       └── context/        # AppContext — global state
+│       ├── context/        # AppContext — global state
+│       ├── types/          # TypeScript type definitions
+│       └── utils/          # layout engines, graph transforms
 ├── data/                   # ChromaDB vector databases (NOT gitignored, DO NOT DELETE)
+├── saved_graphs/           # Persisted user journeys + images
+├── validation/             # Behavior test manifests
+├── docs/                   # Design specs, plans, and screenshot
 ├── .mcp.json               # Playwright MCP config
-├── CLAUDE.md               # This file
-└── docs/plans/             # Design docs and implementation plans
+└── CLAUDE.md               # This file
 ```
 
 ---
