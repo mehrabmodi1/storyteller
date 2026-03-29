@@ -2,34 +2,52 @@ import chromadb
 import pickle
 from typing import List, Dict, Optional
 
-from langchain.embeddings import init_embeddings
 from .corpus_registry import get_registry
 from models.chunk import Chunk
 from . import config
 from config.settings import settings
 
 
+class _GeminiEmbeddings:
+    """Thin wrapper around google-genai SDK for embeddings."""
+
+    def __init__(self, model: str, api_key: str):
+        from google import genai
+        self.model = model
+        self.client = genai.Client(api_key=api_key)
+
+    def embed_query(self, text: str) -> List[float]:
+        from google.genai import types
+        result = self.client.models.embed_content(
+            model=self.model,
+            contents=text,
+            config=types.EmbedContentConfig(task_type="RETRIEVAL_QUERY"),
+        )
+        return result.embeddings[0].values
+
+    def embed_document(self, text: str) -> List[float]:
+        from google.genai import types
+        result = self.client.models.embed_content(
+            model=self.model,
+            contents=text,
+            config=types.EmbedContentConfig(task_type="RETRIEVAL_DOCUMENT"),
+        )
+        return result.embeddings[0].values
+
+
 def _get_embeddings_model():
-    """Create a provider-agnostic embeddings model via LangChain."""
-    try:
-        return init_embeddings(
-            settings.embedding_model,
-            provider=settings.langchain_embeddings_provider,
+    """Create an embeddings model for the active provider."""
+    if settings.provider == "gemini":
+        return _GeminiEmbeddings(
+            model=settings.embedding_model,
             api_key=settings.api_key,
         )
-    except Exception:
-        if settings.provider == "gemini":
-            from langchain_google_genai import GoogleGenerativeAIEmbeddings
-            return GoogleGenerativeAIEmbeddings(
-                model=settings.embedding_model,
-                google_api_key=settings.api_key,
-            )
-        else:
-            from langchain_openai import OpenAIEmbeddings
-            return OpenAIEmbeddings(
-                model=settings.embedding_model,
-                api_key=settings.api_key,
-            )
+    else:
+        from langchain_openai import OpenAIEmbeddings
+        return OpenAIEmbeddings(
+            model=settings.embedding_model,
+            api_key=settings.api_key,
+        )
 
 
 def _provider_chroma_path(base_path: str) -> str:

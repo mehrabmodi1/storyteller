@@ -10,9 +10,7 @@ from rank_bm25 import BM25Okapi
 import argparse
 
 from langchain.chat_models import init_chat_model
-from langchain.embeddings import init_embeddings
 
-# Assuming config.py is in the same directory
 from . import config
 from models.chunk import Chunk, DocumentPosition
 from config.settings import settings
@@ -36,25 +34,17 @@ class HybridRetrieverBuilder:
         self.api_key = settings.resolve_api_key(api_key)
         self.pdf_path = pdf_path
 
-        try:
-            self.embeddings = init_embeddings(
-                settings.embedding_model,
-                provider=settings.langchain_embeddings_provider,
+        if settings.provider == "gemini":
+            from google import genai
+            from google.genai import types
+            self._genai_client = genai.Client(api_key=self.api_key)
+            self._embed_config = types.EmbedContentConfig(task_type="RETRIEVAL_DOCUMENT")
+        else:
+            from langchain_openai import OpenAIEmbeddings
+            self._openai_embeddings = OpenAIEmbeddings(
+                model=settings.embedding_model,
                 api_key=self.api_key,
             )
-        except Exception:
-            if settings.provider == "gemini":
-                from langchain_google_genai import GoogleGenerativeAIEmbeddings
-                self.embeddings = GoogleGenerativeAIEmbeddings(
-                    model=settings.embedding_model,
-                    google_api_key=self.api_key,
-                )
-            else:
-                from langchain_openai import OpenAIEmbeddings
-                self.embeddings = OpenAIEmbeddings(
-                    model=settings.embedding_model,
-                    api_key=self.api_key,
-                )
 
         # Use the standard tokenizer for OpenAI's text-embedding models
         self.tokenizer = tiktoken.get_encoding("cl100k_base")
@@ -149,57 +139,92 @@ class HybridRetrieverBuilder:
         Generates an embedding for a given text using the configured embeddings model.
         """
         try:
-            return self.embeddings.embed_query(text)
+            if settings.provider == "gemini":
+                result = self._genai_client.models.embed_content(
+                    model=settings.embedding_model,
+                    contents=text,
+                    config=self._embed_config,
+                )
+                return result.embeddings[0].values
+            else:
+                return self._openai_embeddings.embed_query(text)
         except Exception as e:
             print(f"Error generating embedding: {e}")
             return []
 
-    def build(self):
+    def _load_cached_chunks(self, corpus_name: str) -> list:
         """
-        Executes the full, resumable pipeline to build the retriever.
+        Load pre-existing chunk cache files for a corpus.
+        Returns a list of dicts with chunk_id, base_text, context, document_position.
+        Returns empty list if no cache exists.
         """
-        self._load_and_tokenize_text()
-        self._create_initial_chunks()
+        corpus_cache_dir = os.path.join(config.CACHE_DIR, corpus_name)
+        if not os.path.isdir(corpus_cache_dir):
+            return []
 
-        print(f"Processing {len(self.chunks)} chunks with checkpointing...")
+        cached = []
+        for filename in os.listdir(corpus_cache_dir):
+            if filename.endswith(".json"):
+                with open(os.path.join(corpus_cache_dir, filename), 'r') as f:
+                    cached.append(json.load(f))
+        return cached
 
-        for chunk in tqdm(self.chunks, desc="Processing Chunks"):
-            cache_path = os.path.join(config.CACHE_DIR, f"{chunk.chunk_id}.json")
+    def build(self, corpus_name: str = "mahabharata"):
+        """
+        Resumable build pipeline:
+        1. If cached chunks with summaries exist for this corpus → load them (skip PDF + summaries)
+        2. Otherwise → chunk PDF, generate summaries, save to cache
+        3. For each chunk, if already in ChromaDB → skip
+        4. Otherwise → embed and upsert
+        """
+        # Phase 1: Try to load existing cached chunks (with summaries)
+        cached_chunks = self._load_cached_chunks(corpus_name)
 
-            if os.path.exists(cache_path):
-                # Load from cache
-                tqdm.write(f"Cache HIT for chunk ID: {chunk.chunk_id[:8]}...")
-                with open(cache_path, 'r') as f:
-                    data = json.load(f)
-                    chunk.context = data['context']
-                    chunk.embedding = data['embedding']
-                    chunk.embedding_model = data['embedding_model']
-                if chunk.embedding_model != settings.embedding_model:
-                    tqdm.write(f"Re-embedding chunk {chunk.chunk_id[:8]} (model mismatch: {chunk.embedding_model} != {settings.embedding_model})")
-                    document_to_embed = f"Context: {chunk.context}\n\nText: {chunk.base_text}"
-                    chunk.embedding = self._get_embedding(document_to_embed)
-                    chunk.embedding_model = settings.embedding_model
+        if cached_chunks:
+            print(f"Loaded {len(cached_chunks)} cached chunks for corpus '{corpus_name}' (skipping PDF + summary generation)")
+        else:
+            print(f"No cached chunks found for corpus '{corpus_name}'. Running full pipeline...")
+            self._load_and_tokenize_text()
+            self._create_initial_chunks()
+
+            corpus_cache_dir = os.path.join(config.CACHE_DIR, corpus_name)
+            os.makedirs(corpus_cache_dir, exist_ok=True)
+
+            for chunk in tqdm(self.chunks, desc="Generating summaries"):
+                cache_path = os.path.join(corpus_cache_dir, f"{chunk.chunk_id}.json")
+                if os.path.exists(cache_path):
+                    tqdm.write(f"Summary cache HIT: {chunk.chunk_id[:8]}...")
+                else:
+                    tqdm.write(f"Summary cache MISS: {chunk.chunk_id[:8]}... Generating.")
+                    chunk.context = self._get_contextual_summary(chunk)
                     with open(cache_path, 'w') as f:
-                        json.dump(chunk.model_dump(), f, indent=2)
-            else:
-                # Process and save to cache
-                tqdm.write(f"Cache MISS for chunk ID: {chunk.chunk_id[:8]}... Processing now.")
-                chunk.context = self._get_contextual_summary(chunk)
+                        json.dump({
+                            'chunk_id': chunk.chunk_id,
+                            'base_text': chunk.base_text,
+                            'context': chunk.context,
+                            'document_position': chunk.document_position.model_dump(),
+                        }, f, indent=2)
 
-                document_to_embed = f"Context: {chunk.context}\n\nText: {chunk.base_text}"
-                chunk.embedding = self._get_embedding(document_to_embed)
-                chunk.embedding_model = settings.embedding_model
+            cached_chunks = self._load_cached_chunks(corpus_name)
 
-                with open(cache_path, 'w') as f:
-                    json.dump(chunk.model_dump(), f, indent=2)
+        # Phase 2: Embed and upsert (skip chunks already in ChromaDB)
+        existing_ids = set(self.chroma_collection.get()['ids'])
+        to_embed = [c for c in cached_chunks if c['chunk_id'] not in existing_ids]
 
-            # Upsert into ChromaDB
-            if chunk.embedding:
+        print(f"Total chunks: {len(cached_chunks)}, already in ChromaDB: {len(existing_ids)}, to embed: {len(to_embed)}")
+
+        for chunk_data in tqdm(to_embed, desc="Embedding chunks"):
+            document_to_embed = f"Context: {chunk_data['context']}\n\nText: {chunk_data['base_text']}"
+            tqdm.write(f"Embedding {chunk_data['chunk_id'][:8]}... ({settings.embedding_model})")
+            embedding = self._get_embedding(document_to_embed)
+            if embedding:
+                tqdm.write(f"  -> {len(embedding)} dims, upserting to ChromaDB")
+                pos = chunk_data.get('document_position', {})
                 self.chroma_collection.upsert(
-                    ids=[chunk.chunk_id],
-                    embeddings=[chunk.embedding],
-                    documents=[f"Context: {chunk.context}\n\nText: {chunk.base_text}"],
-                    metadatas=[{"base_text": chunk.base_text, **chunk.document_position.model_dump()}]
+                    ids=[chunk_data['chunk_id']],
+                    embeddings=[embedding],
+                    documents=[document_to_embed],
+                    metadatas=[{"base_text": chunk_data['base_text'], **pos}]
                 )
 
         print("\nVectorDB processing complete.")
