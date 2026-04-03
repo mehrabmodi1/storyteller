@@ -62,6 +62,8 @@ class Config:
     gemini_embedding_model: str = "gemini-embedding-001"
     gemini_image_model: str = "gemini-2.5-flash-image"
     gemini_image_size: str = "1K"
+    gemini_chat_rpm: int = 5       # Free tier: 5 requests/min
+    gemini_embedding_rpm: int = 20   # Conservative: avoids 429s on free tier
 
     # OpenAI Models
     openai_chat_model: str = "gpt-4o-mini"
@@ -69,6 +71,8 @@ class Config:
     openai_image_model: str = "dall-e-2"
     openai_image_size: str = "256x256"
     openai_image_quality: str = "standard"
+    openai_chat_rpm: int = 0       # 0 = no throttle
+    openai_embedding_rpm: int = 0  # 0 = no throttle
 
     # Data Paths (relative to storyteller_backend/)
     data_dir: str = "../data"
@@ -187,6 +191,16 @@ class Settings:
     @property
     def image_quality(self) -> str:
         return self._config.openai_image_quality
+
+    @property
+    def chat_rpm(self) -> int:
+        p = self._config.provider
+        return self._config.gemini_chat_rpm if p == "gemini" else self._config.openai_chat_rpm
+
+    @property
+    def embedding_rpm(self) -> int:
+        p = self._config.provider
+        return self._config.gemini_embedding_rpm if p == "gemini" else self._config.openai_embedding_rpm
 
     # ============================================
     # API Keys

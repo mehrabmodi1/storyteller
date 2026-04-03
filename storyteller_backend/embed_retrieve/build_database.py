@@ -1,6 +1,7 @@
 import fitz  # PyMuPDF
 import tiktoken
 import os
+import time
 from typing import List, Optional
 import chromadb
 import json
@@ -16,6 +17,26 @@ from models.chunk import Chunk, DocumentPosition
 from config.settings import settings
 
 
+BATCH_SIZE = 50
+MAX_RETRIES = 3
+DEFAULT_RETRY_WAIT = 20
+
+
+class _RateLimiter:
+    """Pre-call delay to stay within RPM limits."""
+
+    def __init__(self, rpm: int):
+        self.min_interval = 60.0 / rpm if rpm > 0 else 0
+        self.last_call = time.time()  # First call also waits the full interval
+
+    def wait(self):
+        if self.min_interval == 0:
+            return
+        elapsed = time.time() - self.last_call
+        if elapsed < self.min_interval:
+            time.sleep(self.min_interval - elapsed)
+        self.last_call = time.time()
+
 
 class HybridRetrieverBuilder:
     """
@@ -25,12 +46,6 @@ class HybridRetrieverBuilder:
     """
 
     def __init__(self, pdf_path: str, api_key: Optional[str] = None):
-        """
-        Initializes the builder and sets up the embeddings model.
-
-        Args:
-            pdf_path: The path to the source PDF file.
-        """
         self.api_key = settings.resolve_api_key(api_key)
         self.pdf_path = pdf_path
 
@@ -46,10 +61,8 @@ class HybridRetrieverBuilder:
                 api_key=self.api_key,
             )
 
-        # Use the standard tokenizer for OpenAI's text-embedding models
         self.tokenizer = tiktoken.get_encoding("cl100k_base")
 
-        # Initialize ChromaDB client
         chroma_path = config.get_chroma_db_path()
         os.makedirs(chroma_path, exist_ok=True)
         self.chroma_client = chromadb.PersistentClient(path=chroma_path)
@@ -57,15 +70,14 @@ class HybridRetrieverBuilder:
             name=config.CHROMA_COLLECTION_NAME
         )
 
+        self._chat_limiter = _RateLimiter(settings.chat_rpm)
+        self._embed_limiter = _RateLimiter(settings.embedding_rpm)
+
         self.tokens: List[int] = []
         self.chunks: List[Chunk] = []
 
     def _load_and_tokenize_text(self):
-        """
-        Loads text from the specified PDF file and tokenizes it.
-        """
         print(f"Loading and tokenizing text from '{self.pdf_path}'...")
-
         raw_text = ""
         try:
             with fitz.open(self.pdf_path) as doc:
@@ -74,94 +86,102 @@ class HybridRetrieverBuilder:
         except Exception as e:
             print(f"Error reading PDF file: {e}")
             return
-
         self.tokens = self.tokenizer.encode(raw_text)
         print(f"Successfully tokenized text into {len(self.tokens)} tokens.")
 
     def _create_initial_chunks(self):
-        """
-        Creates initial chunks from the tokenized text based on the config
-        and stores them as Chunk objects.
-        """
         print("Creating initial text chunks...")
         if not self.tokens:
             print("Token list is empty. Cannot create chunks.")
             return
-
         step_size = config.CHUNK_SIZE - config.CHUNK_OVERLAP
-
         for i in range(0, len(self.tokens), step_size):
             chunk_tokens = self.tokens[i:i + config.CHUNK_SIZE]
-
             if len(chunk_tokens) < config.CHUNK_OVERLAP:
-                 continue
-
+                continue
             chunk_text = self.tokenizer.decode(chunk_tokens)
-
             position = DocumentPosition(
                 start_token_index=i,
                 end_token_index=i + len(chunk_tokens)
             )
-
-            chunk_obj = Chunk(base_text=chunk_text, document_position=position)
-            self.chunks.append(chunk_obj)
-
+            self.chunks.append(Chunk(base_text=chunk_text, document_position=position))
         print(f"Created {len(self.chunks)} initial chunks.")
 
     def _get_contextual_summary(self, chunk: Chunk) -> str:
-        """
-        Generates a contextual summary for a chunk using an LLM.
-        """
         start = max(0, chunk.document_position.start_token_index - (config.CONTEXT_WINDOW_SIZE // 2))
         end = min(len(self.tokens), chunk.document_position.end_token_index + (config.CONTEXT_WINDOW_SIZE // 2))
+        context_text = self.tokenizer.decode(self.tokens[start:end])
 
-        context_tokens = self.tokens[start:end]
-        context_text = self.tokenizer.decode(context_tokens)
+        for attempt in range(MAX_RETRIES):
+            self._chat_limiter.wait()
+            try:
+                llm = init_chat_model(
+                    settings.chat_model,
+                    model_provider=settings.langchain_chat_provider,
+                    api_key=self.api_key,
+                    max_tokens=config.CONTEXT_SUMMARY_TOKENS,
+                )
+                response = llm.invoke([
+                    ("system", "You are a helpful assistant. Summarize the following text in about 200 tokens, focusing on the main characters, events, and themes."),
+                    ("user", context_text),
+                ])
+                return response.content or ""
+            except Exception as e:
+                if '429' in str(e) and attempt < MAX_RETRIES - 1:
+                    print(f"  Rate limited (summary). Retrying in {DEFAULT_RETRY_WAIT}s (attempt {attempt + 1}/{MAX_RETRIES})")
+                    time.sleep(DEFAULT_RETRY_WAIT)
+                else:
+                    raise
 
-        try:
-            llm = init_chat_model(
-                settings.chat_model,
-                model_provider=settings.langchain_chat_provider,
-                api_key=self.api_key,
-                max_tokens=config.CONTEXT_SUMMARY_TOKENS,
-            )
-            response = llm.invoke([
-                ("system", "You are a helpful assistant. Summarize the following text in about 200 tokens, focusing on the main characters, events, and themes."),
-                ("user", context_text),
-            ])
-            return response.content or ""
-        except Exception as e:
-            print(f"Error generating summary for chunk {chunk.chunk_id}: {e}")
-            return ""
+    def _is_rate_limit_error(self, e: Exception) -> bool:
+        """Check if an exception is a rate limit (429) error."""
+        error_str = str(e)
+        return '429' in error_str or 'RESOURCE_EXHAUSTED' in error_str
+
+    def _parse_retry_delay(self, e: Exception) -> int:
+        """Extract retry delay from error message, or return default."""
+        error_str = str(e)
+        if 'PerDay' in error_str:
+            # Daily quota exhausted — no point retrying quickly
+            return -1  # Signal: daily limit hit
+        # Try to find "retry in Ns" pattern
+        import re
+        match = re.search(r'retry in (\d+)', error_str, re.IGNORECASE)
+        if match:
+            return int(match.group(1)) + 5  # Add buffer
+        return DEFAULT_RETRY_WAIT
 
     def _get_embedding(self, text: str) -> List[float]:
-        """
-        Generates an embedding for a given text using the configured embeddings model.
-        """
-        try:
-            if settings.provider == "gemini":
-                result = self._genai_client.models.embed_content(
-                    model=settings.embedding_model,
-                    contents=text,
-                    config=self._embed_config,
-                )
-                return result.embeddings[0].values
-            else:
-                return self._openai_embeddings.embed_query(text)
-        except Exception as e:
-            print(f"Error generating embedding: {e}")
-            return []
+        for attempt in range(MAX_RETRIES):
+            self._embed_limiter.wait()
+            try:
+                if settings.provider == "gemini":
+                    result = self._genai_client.models.embed_content(
+                        model=settings.embedding_model,
+                        contents=text,
+                        config=self._embed_config,
+                    )
+                    return result.embeddings[0].values
+                else:
+                    return self._openai_embeddings.embed_query(text)
+            except Exception as e:
+                if self._is_rate_limit_error(e):
+                    delay = self._parse_retry_delay(e)
+                    if delay == -1:
+                        print(f"\n  DAILY QUOTA EXHAUSTED. Progress is saved — re-run tomorrow to resume.")
+                        raise
+                    if attempt < MAX_RETRIES - 1:
+                        print(f"  Rate limited (embedding). Retrying in {delay}s (attempt {attempt + 1}/{MAX_RETRIES})")
+                        time.sleep(delay)
+                    else:
+                        raise
+                else:
+                    raise
 
     def _load_cached_chunks(self, corpus_name: str) -> list:
-        """
-        Load pre-existing chunk cache files for a corpus.
-        Returns a list of dicts with chunk_id, base_text, context, document_position.
-        Returns empty list if no cache exists.
-        """
         corpus_cache_dir = os.path.join(config.CACHE_DIR, corpus_name)
         if not os.path.isdir(corpus_cache_dir):
             return []
-
         cached = []
         for filename in os.listdir(corpus_cache_dir):
             if filename.endswith(".json"):
@@ -172,18 +192,19 @@ class HybridRetrieverBuilder:
     def build(self, corpus_name: str = "mahabharata"):
         """
         Resumable build pipeline:
-        1. If cached chunks with summaries exist for this corpus → load them (skip PDF + summaries)
+        1. If cached chunks with summaries exist → load them (skip PDF + summaries)
         2. Otherwise → chunk PDF, generate summaries, save to cache
-        3. For each chunk, if already in ChromaDB → skip
-        4. Otherwise → embed and upsert
+        3. Skip chunks already in ChromaDB
+        4. Embed remaining chunks in batches, upsert to ChromaDB
+        5. Stop on failure (no silent skipping)
         """
-        # Phase 1: Try to load existing cached chunks (with summaries)
+        # Phase 1: Load or generate chunks with summaries
         cached_chunks = self._load_cached_chunks(corpus_name)
 
         if cached_chunks:
-            print(f"Loaded {len(cached_chunks)} cached chunks for corpus '{corpus_name}' (skipping PDF + summary generation)")
+            print(f"Loaded {len(cached_chunks)} cached chunks for '{corpus_name}' (skipping PDF + summary generation)")
         else:
-            print(f"No cached chunks found for corpus '{corpus_name}'. Running full pipeline...")
+            print(f"No cached chunks for '{corpus_name}'. Running full pipeline...")
             self._load_and_tokenize_text()
             self._create_initial_chunks()
 
@@ -193,9 +214,9 @@ class HybridRetrieverBuilder:
             for chunk in tqdm(self.chunks, desc="Generating summaries"):
                 cache_path = os.path.join(corpus_cache_dir, f"{chunk.chunk_id}.json")
                 if os.path.exists(cache_path):
-                    tqdm.write(f"Summary cache HIT: {chunk.chunk_id[:8]}...")
+                    tqdm.write(f"  Summary cache HIT: {chunk.chunk_id[:8]}")
                 else:
-                    tqdm.write(f"Summary cache MISS: {chunk.chunk_id[:8]}... Generating.")
+                    tqdm.write(f"  Summary cache MISS: {chunk.chunk_id[:8]}... Generating.")
                     chunk.context = self._get_contextual_summary(chunk)
                     with open(cache_path, 'w') as f:
                         json.dump({
@@ -207,63 +228,75 @@ class HybridRetrieverBuilder:
 
             cached_chunks = self._load_cached_chunks(corpus_name)
 
-        # Phase 2: Embed and upsert (skip chunks already in ChromaDB)
+        # Phase 2: Embed and upsert in batches (skip chunks already in ChromaDB)
         existing_ids = set(self.chroma_collection.get()['ids'])
         to_embed = [c for c in cached_chunks if c['chunk_id'] not in existing_ids]
 
         print(f"Total chunks: {len(cached_chunks)}, already in ChromaDB: {len(existing_ids)}, to embed: {len(to_embed)}")
 
-        for chunk_data in tqdm(to_embed, desc="Embedding chunks"):
-            document_to_embed = f"Context: {chunk_data['context']}\n\nText: {chunk_data['base_text']}"
-            tqdm.write(f"Embedding {chunk_data['chunk_id'][:8]}... ({settings.embedding_model})")
-            embedding = self._get_embedding(document_to_embed)
-            if embedding:
-                tqdm.write(f"  -> {len(embedding)} dims, upserting to ChromaDB")
-                pos = chunk_data.get('document_position', {})
-                self.chroma_collection.upsert(
-                    ids=[chunk_data['chunk_id']],
-                    embeddings=[embedding],
-                    documents=[document_to_embed],
-                    metadatas=[{"base_text": chunk_data['base_text'], **pos}]
-                )
+        if not to_embed:
+            print("All chunks already embedded. Skipping to BM25.")
+        else:
+            total_batches = (len(to_embed) + BATCH_SIZE - 1) // BATCH_SIZE
+            embedded_count = len(existing_ids)
+
+            with tqdm(total=len(to_embed), desc="Embedding chunks") as pbar:
+                for batch_idx in range(0, len(to_embed), BATCH_SIZE):
+                    batch = to_embed[batch_idx:batch_idx + BATCH_SIZE]
+                    batch_num = (batch_idx // BATCH_SIZE) + 1
+
+                    ids, embeddings, documents, metadatas = [], [], [], []
+
+                    for chunk_data in batch:
+                        document_text = f"Context: {chunk_data['context']}\n\nText: {chunk_data['base_text']}"
+                        embedding = self._get_embedding(document_text)
+                        ids.append(chunk_data['chunk_id'])
+                        embeddings.append(embedding)
+                        documents.append(document_text)
+                        metadatas.append({"base_text": chunk_data['base_text'], **chunk_data.get('document_position', {})})
+                        pbar.update(1)
+
+                    # Batch upsert — single atomic write
+                    self.chroma_collection.upsert(
+                        ids=ids,
+                        embeddings=embeddings,
+                        documents=documents,
+                        metadatas=metadatas,
+                    )
+
+                    embedded_count += len(batch)
+                    tqdm.write(f"Batch {batch_num}/{total_batches} complete. {embedded_count}/{len(cached_chunks)} chunks in ChromaDB.")
 
         print("\nVectorDB processing complete.")
-        self._build_bm25_index()
+        self._build_bm25_index(corpus_name)
         print("Hybrid retriever build process finished.")
 
-    def _build_bm25_index(self):
-        """
-        Builds and saves a BM25 index by loading all processed chunks
-        directly from the cache directory.
-        """
+    def _build_bm25_index(self, corpus_name: str = "mahabharata"):
         print("Building BM25 index from cached chunks...")
+        corpus_cache_dir = os.path.join(config.CACHE_DIR, corpus_name)
+
+        if not os.path.isdir(corpus_cache_dir):
+            print(f"Cache directory not found at {corpus_cache_dir}. Aborting.")
+            return
 
         corpus = []
         chunk_ids = []
 
-        if not os.path.exists(config.CACHE_DIR):
-            print(f"Cache directory not found at {config.CACHE_DIR}. Aborting.")
-            return
-
-        cache_files = os.listdir(config.CACHE_DIR)
+        cache_files = [f for f in os.listdir(corpus_cache_dir) if f.endswith(".json")]
         if not cache_files:
             print("No cached chunks found to build BM25 index. Aborting.")
             return
 
         for filename in tqdm(cache_files, desc="Loading chunks for BM25"):
-            if filename.endswith(".json"):
-                cache_path = os.path.join(config.CACHE_DIR, filename)
-                with open(cache_path, 'r') as f:
-                    data = json.load(f)
-                    full_text = f"Context: {data.get('context', '')}\\n\\nText: {data.get('base_text', '')}"
-                    corpus.append(full_text)
-                    chunk_ids.append(data['chunk_id'])
+            with open(os.path.join(corpus_cache_dir, filename), 'r') as f:
+                data = json.load(f)
+                full_text = f"Context: {data.get('context', '')}\n\nText: {data.get('base_text', '')}"
+                corpus.append(full_text)
+                chunk_ids.append(data['chunk_id'])
 
-        # Tokenize the corpus for BM25
         tokenized_corpus = [doc.split(" ") for doc in corpus]
         bm25 = BM25Okapi(tokenized_corpus)
 
-        # Save the model and the chunk_id mapping
         with open(config.BM25_INDEX_PATH, "wb") as f:
             pickle.dump({"model": bm25, "chunk_ids": chunk_ids}, f)
 
@@ -271,10 +304,6 @@ class HybridRetrieverBuilder:
 
 
 if __name__ == '__main__':
-    """
-    Main execution block to run the full data processing pipeline.
-    Includes a check to avoid re-building if the final index already exists.
-    """
     parser = argparse.ArgumentParser(description="Build the hybrid retrieval database.")
     parser.add_argument(
         '--force-rebuild',

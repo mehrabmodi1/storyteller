@@ -307,7 +307,8 @@ def generate_search_query(state: StorytellerState) -> Dict[str, Any]:
     
     # The user's prompt is the last message in the list
     last_message = state['messages'][-1].content
-    search_query = query_generation_chain.invoke({"input": last_message}).query
+    result = query_generation_chain.invoke({"input": last_message})
+    search_query = result.query if result and hasattr(result, 'query') else last_message
 
     print(f"Generated Search Query: {search_query}")
     
@@ -611,9 +612,19 @@ def generate_choices(state: StorytellerState) -> Dict[str, Any]:
     if len(story_for_choices) > max_chars:
         story_for_choices = story_for_choices[-max_chars:]
 
-    generated_choices = choice_generation_chain.invoke({
+    result = choice_generation_chain.invoke({
         "story": story_for_choices
-    }).choices
+    })
+
+    if result is None or not hasattr(result, 'choices') or not result.choices:
+        print("[generate_choices] Structured output returned None or empty. Using fallback choices.")
+        generated_choices = [
+            "Continue exploring this part of the story",
+            "Learn more about what happens next",
+            "Discover another side of this tale",
+        ]
+    else:
+        generated_choices = result.choices
 
     return {"choices": generated_choices}
 
