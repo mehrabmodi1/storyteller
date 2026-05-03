@@ -13,10 +13,11 @@ For setup instructions (Poetry, npm, `.env`, run commands), see the [README Quic
 3. [Story-generation flow (LangGraph)](#3-story-generation-flow-langgraph)
 4. [Provider abstraction](#4-provider-abstraction)
 5. [Corpus ingestion pipeline](#5-corpus-ingestion-pipeline)
-6. [Hybrid retrieval](#6-hybrid-retrieval)
-7. [Frontend architecture](#7-frontend-architecture)
-8. [Extension points](#8-extension-points)
-9. [Common gotchas](#9-common-gotchas)
+6. [Loading pre-built corpus data](#6-loading-pre-built-corpus-data)
+7. [Hybrid retrieval](#7-hybrid-retrieval)
+8. [Frontend architecture](#8-frontend-architecture)
+9. [Extension points](#9-extension-points)
+10. [Common gotchas](#10-common-gotchas)
 
 ---
 
@@ -215,7 +216,82 @@ Failure modes:
 
 ---
 
-## 6. Hybrid retrieval
+## 6. Loading pre-built corpus data
+
+If you already have a snapshot of pre-built corpus data (typically distributed as a tarball or Google Drive folder), you can skip the ingestion pipeline entirely and just drop it into place.
+
+A snapshot has the following layout (one per provider, since vector embeddings are provider-specific):
+
+```
+<snapshot_root>/
+├── corpus_registry.json
+├── chroma_db/
+│   ├── arabian_nights/
+│   ├── jataka_tales/
+│   ├── locus_platform_docs/
+│   ├── mahabharata/
+│   ├── odyssey/
+│   └── volsunga_saga/
+├── bm25_indexes/
+│   ├── arabian_nights_bm25.pkl
+│   ├── jataka_tales_bm25.pkl
+│   └── ...
+└── processed_chunks/                  # optional; needed only if you'll re-build
+    ├── arabian_nights/<chunk>.json
+    └── ...
+```
+
+### Steps
+
+1. **Place the snapshot at `<repo>/data/`.** The `data/` directory is gitignored except for `corpus_registry.json`, so it's safe to drop large binaries here.
+   ```bash
+   # From the snapshot's location
+   cp -R <snapshot_root>/. <repo>/data/
+   ```
+
+2. **Add the `_<provider>` suffix to each chroma directory** to match the layout the build/retrieve layer expects. Skip this if the snapshot was already produced post-May-2026 and uses the suffixed layout. For an OpenAI snapshot:
+   ```bash
+   cd <repo>/data/chroma_db
+   for c in arabian_nights jataka_tales locus_platform_docs mahabharata odyssey volsunga_saga; do
+     mv "$c" "${c}_openai"
+   done
+   ```
+   For a Gemini snapshot, use `_gemini` instead.
+
+3. **Verify the registry path layout.** The repo's `data/corpus_registry.json` is the source of truth. If the snapshot's registry differs, prefer the repo's (it's tracked; theirs is point-in-time). Quick check:
+   ```bash
+   grep chroma_db_path data/corpus_registry.json
+   # Each non-mahabharata corpus should be: data/chroma_db/<name>
+   # Mahabharata should be:                  data/chroma_db/mahabharata
+   ```
+
+4. **Smoke test** — open a Python REPL in `storyteller_backend/` and instantiate a retriever:
+   ```python
+   from embed_retrieve.retriever import HybridRetriever
+   r = HybridRetriever(corpus_name="mahabharata")
+   print(r.chroma_collection.count())   # should be > 0
+   ```
+
+If the count is 0 or the collection isn't found, the most common cause is a mismatch between the snapshot's chroma layout and the active provider's expected suffix (step 2 above).
+
+### Producing a snapshot
+
+To package the current `data/` for sharing:
+
+```bash
+cd <repo>
+tar czf storyteller_data_snapshot.tar.gz \
+  data/corpus_registry.json \
+  data/chroma_db/ \
+  data/bm25_indexes/ \
+  data/processed_chunks/      # omit for a smaller snapshot if recipients won't re-build
+```
+
+Note that `chroma_db/` carries the per-provider suffix, so a single snapshot is provider-specific. To support both providers, package both `<corpus>_openai/` and `<corpus>_gemini/` directories (or distribute provider-specific tarballs).
+
+---
+
+## 7. Hybrid retrieval
 
 [`embed_retrieve/retriever.py`](../storyteller_backend/embed_retrieve/retriever.py) implements `HybridRetriever`, which fuses two ranked lists:
 
@@ -228,7 +304,7 @@ Path resolution goes through [`embed_retrieve/paths.py:provider_chroma_path()`](
 
 ---
 
-## 7. Frontend architecture
+## 8. Frontend architecture
 
 ```
 storyteller_frontend/src/
@@ -253,7 +329,7 @@ storyteller_frontend/src/
 
 ---
 
-## 8. Extension points
+## 9. Extension points
 
 | Goal | Where to start |
 |---|---|
@@ -267,7 +343,7 @@ storyteller_frontend/src/
 
 ---
 
-## 9. Common gotchas
+## 10. Common gotchas
 
 - **`chromadb` version drift permanently destroys vector data.** Always use `poetry install`. Never `pip install`.
 - **Backend cwd matters.** `embed_retrieve/config.py:CACHE_DIR` is a relative path (`../data/processed_chunks`). Run backend commands from `storyteller_backend/`.

@@ -109,42 +109,60 @@ class Config:
     """
     Application configuration with hardcoded defaults.
     These values are NOT loaded from environment variables.
+
+    Layout (top → bottom = most frequently tweaked → least):
+      1. Active provider           — switch Gemini ↔ OpenAI
+      2. Story-generation params   — paragraph count, length
+      3. Retrieval params          — top-k, BM25/semantic weights
+      4. Image storage             — local cache limits
+      5. Server / paths / CORS / auth — rarely touched
     """
 
-    # API Server
-    api_host: str = "0.0.0.0"
-    api_port: int = 8000
-    api_reload: bool = True
-
-    # Active provider — toggle here to switch between Gemini / OpenAI
+    # ============================================
+    # 1. ACTIVE PROVIDER
+    # ============================================
+    # Pick which provider's models the app uses for chat, embeddings, and
+    # images. The full model bundle for each provider is defined above in
+    # PROVIDER_PROFILES; switching this single line is enough.
     provider: Provider = Provider.GEMINI
 
-    # Data Paths (relative to storyteller_backend/)
-    data_dir: str = "../data"
-    saved_graphs_dir: str = "../saved_graphs"
-    personas_file: str = "config/personas.json"
-
-    # CORS
-    cors_origins: List[str] = ["http://localhost:3000", "http://localhost:5173"]
-
-    # Retrieval
-    retrieval_top_k: int = 10
-    bm25_weight: float = 0.5
-    semantic_weight: float = 0.5
-
-    # Story Generation
+    # ============================================
+    # 2. STORY GENERATION
+    # ============================================
     default_paragraph_count: int = 4
     min_paragraph_count: int = 1
     max_paragraph_count: int = 8
     words_per_paragraph: int = 200        # Used in prompt instruction
     max_tokens_per_paragraph: int = 300   # Used for max_tokens ceiling
 
-    # Authentication
-    auth_mode: Literal["self_hosted", "per_request_key", "credit_system"] = "self_hosted"
+    # ============================================
+    # 3. RETRIEVAL
+    # ============================================
+    retrieval_top_k: int = 10
+    bm25_weight: float = 0.5
+    semantic_weight: float = 0.5
 
-    # Image Storage
+    # ============================================
+    # 4. IMAGE STORAGE
+    # ============================================
     local_image_storage: bool = True
     image_storage_limit_mb: int = 100
+
+    # ============================================
+    # 5. SERVER / PATHS / CORS / AUTH (rarely tweaked)
+    # ============================================
+    api_host: str = "0.0.0.0"
+    api_port: int = 8000
+    api_reload: bool = True
+
+    # Data paths (relative to storyteller_backend/)
+    data_dir: str = "../data"
+    saved_graphs_dir: str = "../saved_graphs"
+    personas_file: str = "config/personas.json"
+
+    cors_origins: List[str] = ["http://localhost:3000", "http://localhost:5173"]
+
+    auth_mode: Literal["self_hosted", "per_request_key", "credit_system"] = "self_hosted"
 
 
 # ============================================

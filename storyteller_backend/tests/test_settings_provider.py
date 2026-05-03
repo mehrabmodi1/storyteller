@@ -16,7 +16,7 @@ class TestProviderConfig:
             s = Settings.__new__(Settings)
             s._config = Config()
             s._config.provider = Provider.GEMINI
-            assert s.chat_model == "gemini-2.5-flash"
+            assert s.chat_model == "gemini-2.5-flash-lite"
 
     def test_chat_model_resolves_for_openai(self):
         from config.settings import Config, Settings, Provider

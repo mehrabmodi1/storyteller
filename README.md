@@ -125,21 +125,11 @@ Each provider's models, RPM, and other knobs are bundled in the `PROVIDER_PROFIL
 
 ### Gemini (free tier — default)
 
-**What works on free tier:**
-- ✅ Chat / story generation (`gemini-2.5-flash-lite` by default — see note below)
-- ✅ Embeddings (`gemini-embedding-001`)
-- ❌ **Image generation requires billing-enabled** — free-tier quota is `0`. Stories will still generate; just no images.
+The fastest way to try Storyteller without a credit card. Google's free tier is enough to ingest the bundled corpora and run a handful of story journeys per day. Daily caps and pricing change frequently, so check current limits at <https://aistudio.google.com/rate-limit> if you hit one.
 
-**Observed daily quotas (free tier, per-project):**
+**Structural caveat:** image generation on Gemini is paywalled — free-tier image quota is `0`. Stories still generate fine; they just come without illustrations. Once billing is enabled the image model works normally.
 
-| Resource | Limit |
-|---|---|
-| `gemini-2.5-flash` chat requests | ~20 / day |
-| `gemini-2.5-flash-lite` chat requests | substantially higher (200+) |
-| `gemini-embedding-001` requests | ~1000 / day |
-| Image gen (`gemini-2.5-flash-image`) | **0 / day** |
-
-> Each story journey burns ~6 chat calls (screen, search query, story, summary, choices, image prompt). On `gemini-2.5-flash`, that's ~3 stories/day before hitting the cap. `flash-lite` is much more permissive but produces less rich prose. The default in `PROVIDER_PROFILES` is `gemini-2.5-flash-lite`; flip to `gemini-2.5-flash` once billing is enabled (see the comment in `settings.py`).
+The default chat model is `gemini-2.5-flash-lite`, chosen for higher per-day throughput. `gemini-2.5-flash` produces noticeably richer prose but caps usage tightly on the free tier — see the comment in [`settings.py`](storyteller_backend/config/settings.py) for when to flip.
 
 **Setup:**
 1. Get a key at <https://aistudio.google.com/apikey>.
@@ -148,13 +138,7 @@ Each provider's models, RPM, and other knobs are bundled in the `PROVIDER_PROFIL
 
 ### OpenAI (paid)
 
-**Full functionality, no daily caps relevant to this app.** Per-call cost is small.
-
-| Resource | Cost |
-|---|---|
-| `gpt-4o-mini` chat | ~$0.0002 / 1K input tokens, ~$0.0006 / 1K output |
-| `text-embedding-3-small` | ~$0.00002 / 1K tokens (one-time per corpus) |
-| `dall-e-2` (256×256) | ~$0.016 / image |
+Full functionality including image generation, with usage limits that won't realistically constrain this app. You're paying per call (typically pennies per story), so there's no daily cap to plan around.
 
 **Setup:**
 1. Get a key at <https://platform.openai.com/api-keys>.
