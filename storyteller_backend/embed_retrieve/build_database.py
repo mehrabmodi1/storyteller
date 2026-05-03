@@ -10,9 +10,11 @@ import pickle
 from rank_bm25 import BM25Okapi
 import argparse
 
-from langchain.chat_models import init_chat_model
+from services.llm import get_chat_llm
 
 from . import config
+from .corpus_registry import get_registry
+from .paths import provider_chroma_path
 from models.chunk import Chunk, DocumentPosition
 from config.settings import settings
 
@@ -40,14 +42,24 @@ class _RateLimiter:
 
 class HybridRetrieverBuilder:
     """
-    Builds a hybrid retriever by processing a source text, generating
-    contextualized and embedded chunks, and saving them to a persistent
-    vector database and a cache.
+    Builds a hybrid retriever for a single corpus by reading paths from the
+    registry. Writes the ChromaDB collection to <chroma_db_path>_<provider>
+    and the BM25 index to bm25_index_path (provider-agnostic).
     """
 
-    def __init__(self, pdf_path: str, api_key: Optional[str] = None):
+    def __init__(self, corpus_name: str, api_key: Optional[str] = None):
+        self.corpus_name = corpus_name
+        registry = get_registry()
+        corpus_config = registry.get_corpus(corpus_name)
+        if not corpus_config:
+            raise ValueError(
+                f"Corpus '{corpus_name}' not found in registry. "
+                f"Available corpuses: {list(registry.corpuses.keys())}"
+            )
+        self.corpus_config = corpus_config
+
         self.api_key = settings.resolve_api_key(api_key)
-        self.pdf_path = pdf_path
+        self.pdf_path = corpus_config.source_file
 
         if settings.provider == "gemini":
             from google import genai
@@ -63,11 +75,11 @@ class HybridRetrieverBuilder:
 
         self.tokenizer = tiktoken.get_encoding("cl100k_base")
 
-        chroma_path = config.get_chroma_db_path()
+        chroma_path = provider_chroma_path(corpus_config.chroma_db_path)
         os.makedirs(chroma_path, exist_ok=True)
         self.chroma_client = chromadb.PersistentClient(path=chroma_path)
         self.chroma_collection = self.chroma_client.get_or_create_collection(
-            name=config.CHROMA_COLLECTION_NAME
+            name=corpus_config.collection_name
         )
 
         self._chat_limiter = _RateLimiter(settings.chat_rpm)
@@ -115,9 +127,7 @@ class HybridRetrieverBuilder:
         for attempt in range(MAX_RETRIES):
             self._chat_limiter.wait()
             try:
-                llm = init_chat_model(
-                    settings.chat_model,
-                    model_provider=settings.langchain_chat_provider,
+                llm = get_chat_llm(
                     api_key=self.api_key,
                     max_tokens=config.CONTEXT_SUMMARY_TOKENS,
                 )
@@ -178,8 +188,8 @@ class HybridRetrieverBuilder:
                 else:
                     raise
 
-    def _load_cached_chunks(self, corpus_name: str) -> list:
-        corpus_cache_dir = os.path.join(config.CACHE_DIR, corpus_name)
+    def _load_cached_chunks(self) -> list:
+        corpus_cache_dir = os.path.join(config.CACHE_DIR, self.corpus_name)
         if not os.path.isdir(corpus_cache_dir):
             return []
         cached = []
@@ -189,7 +199,7 @@ class HybridRetrieverBuilder:
                     cached.append(json.load(f))
         return cached
 
-    def build(self, corpus_name: str = "mahabharata"):
+    def build(self):
         """
         Resumable build pipeline:
         1. If cached chunks with summaries exist → load them (skip PDF + summaries)
@@ -199,16 +209,16 @@ class HybridRetrieverBuilder:
         5. Stop on failure (no silent skipping)
         """
         # Phase 1: Load or generate chunks with summaries
-        cached_chunks = self._load_cached_chunks(corpus_name)
+        cached_chunks = self._load_cached_chunks()
 
         if cached_chunks:
-            print(f"Loaded {len(cached_chunks)} cached chunks for '{corpus_name}' (skipping PDF + summary generation)")
+            print(f"Loaded {len(cached_chunks)} cached chunks for '{self.corpus_name}' (skipping PDF + summary generation)")
         else:
-            print(f"No cached chunks for '{corpus_name}'. Running full pipeline...")
+            print(f"No cached chunks for '{self.corpus_name}'. Running full pipeline...")
             self._load_and_tokenize_text()
             self._create_initial_chunks()
 
-            corpus_cache_dir = os.path.join(config.CACHE_DIR, corpus_name)
+            corpus_cache_dir = os.path.join(config.CACHE_DIR, self.corpus_name)
             os.makedirs(corpus_cache_dir, exist_ok=True)
 
             for chunk in tqdm(self.chunks, desc="Generating summaries"):
@@ -226,7 +236,7 @@ class HybridRetrieverBuilder:
                             'document_position': chunk.document_position.model_dump(),
                         }, f, indent=2)
 
-            cached_chunks = self._load_cached_chunks(corpus_name)
+            cached_chunks = self._load_cached_chunks()
 
         # Phase 2: Embed and upsert in batches (skip chunks already in ChromaDB)
         existing_ids = set(self.chroma_collection.get()['ids'])
@@ -256,7 +266,6 @@ class HybridRetrieverBuilder:
                         metadatas.append({"base_text": chunk_data['base_text'], **chunk_data.get('document_position', {})})
                         pbar.update(1)
 
-                    # Batch upsert — single atomic write
                     self.chroma_collection.upsert(
                         ids=ids,
                         embeddings=embeddings,
@@ -268,12 +277,12 @@ class HybridRetrieverBuilder:
                     tqdm.write(f"Batch {batch_num}/{total_batches} complete. {embedded_count}/{len(cached_chunks)} chunks in ChromaDB.")
 
         print("\nVectorDB processing complete.")
-        self._build_bm25_index(corpus_name)
+        self._build_bm25_index()
         print("Hybrid retriever build process finished.")
 
-    def _build_bm25_index(self, corpus_name: str = "mahabharata"):
+    def _build_bm25_index(self):
         print("Building BM25 index from cached chunks...")
-        corpus_cache_dir = os.path.join(config.CACHE_DIR, corpus_name)
+        corpus_cache_dir = os.path.join(config.CACHE_DIR, self.corpus_name)
 
         if not os.path.isdir(corpus_cache_dir):
             print(f"Cache directory not found at {corpus_cache_dir}. Aborting.")
@@ -297,26 +306,66 @@ class HybridRetrieverBuilder:
         tokenized_corpus = [doc.split(" ") for doc in corpus]
         bm25 = BM25Okapi(tokenized_corpus)
 
-        with open(config.BM25_INDEX_PATH, "wb") as f:
+        bm25_path = self.corpus_config.bm25_index_path
+        os.makedirs(os.path.dirname(bm25_path), exist_ok=True)
+        with open(bm25_path, "wb") as f:
             pickle.dump({"model": bm25, "chunk_ids": chunk_ids}, f)
 
-        print(f"BM25 index built with {len(chunk_ids)} documents and saved to {config.BM25_INDEX_PATH}")
+        print(f"BM25 index built with {len(chunk_ids)} documents and saved to {bm25_path}")
+
+
+def build_corpus(name: str, force_rebuild: bool = False) -> None:
+    """Build (or resume) the hybrid retriever for a single corpus.
+
+    The build is resumable, so calling this on an already-built corpus is
+    cheap (no re-embedding of existing chunks). force_rebuild skips the
+    short-circuit that bails out when the BM25 index already exists.
+    """
+    registry = get_registry()
+    corpus_config = registry.get_corpus(name)
+    if not corpus_config:
+        raise ValueError(f"Corpus '{name}' not found in registry.")
+
+    if os.path.exists(corpus_config.bm25_index_path) and not force_rebuild:
+        print(f"BM25 index already exists for '{name}'. Skipping (use --force-rebuild to rebuild).")
+        return
+
+    print(f"--- Starting Hybrid Retriever Build Process for '{name}' ---")
+    builder = HybridRetrieverBuilder(corpus_name=name)
+    builder.build()
+    print(f"--- Build Process Complete for '{name}' ---")
+
+
+def rebuild_bm25_for_corpus(name: str) -> None:
+    """Rebuild only the BM25 index for a corpus from its cached chunks.
+
+    Cheap to run (no API calls). Used after the path-layout migration to
+    move BM25 indexes to their per-corpus registry paths.
+    """
+    registry = get_registry()
+    corpus_config = registry.get_corpus(name)
+    if not corpus_config:
+        raise ValueError(f"Corpus '{name}' not found in registry.")
+
+    print(f"Rebuilding BM25 for '{name}' → {corpus_config.bm25_index_path}")
+    builder = HybridRetrieverBuilder.__new__(HybridRetrieverBuilder)
+    builder.corpus_name = name
+    builder.corpus_config = corpus_config
+    builder._build_bm25_index()
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="Build the hybrid retrieval database.")
+    parser = argparse.ArgumentParser(description="Build the hybrid retrieval database for a corpus.")
+    parser.add_argument(
+        '--corpus',
+        default='mahabharata',
+        help="Name of the corpus to build (default: mahabharata).",
+    )
     parser.add_argument(
         '--force-rebuild',
         action='store_true',
-        help="Force the build process to run even if the BM25 index already exists."
+        help="Force the build process to run even if the BM25 index already exists.",
     )
     args = parser.parse_args()
 
-    if os.path.exists(config.BM25_INDEX_PATH) and not args.force_rebuild:
-        print("BM25 index already exists. Build process skipped.")
-        print(f"To re-run the build, use the --force-rebuild flag.")
-    else:
-        print("--- Starting Hybrid Retriever Build Process ---")
-        builder = HybridRetrieverBuilder(pdf_path=config.PDF_PATH)
-        builder.build()
-        print("--- Build Process Complete ---")
+    build_corpus(args.corpus, args.force_rebuild)

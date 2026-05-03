@@ -3,6 +3,7 @@ import pickle
 from typing import List, Dict, Optional
 
 from .corpus_registry import get_registry
+from .paths import provider_chroma_path
 from models.chunk import Chunk
 from . import config
 from config.settings import settings
@@ -50,11 +51,6 @@ def _get_embeddings_model():
         )
 
 
-def _provider_chroma_path(base_path: str) -> str:
-    """Append provider suffix to a ChromaDB base path."""
-    return f"{base_path}_{settings.provider}"
-
-
 class HybridRetriever:
     """
     Performs hybrid search by combining results from a keyword-based (BM25)
@@ -75,7 +71,7 @@ class HybridRetriever:
             raise ValueError(f"Corpus '{self.corpus_name}' is not active.")
 
         # Load ChromaDB with provider-namespaced path
-        chroma_path = _provider_chroma_path(self.corpus_config.chroma_db_path)
+        chroma_path = provider_chroma_path(self.corpus_config.chroma_db_path)
         self.chroma_client = chromadb.PersistentClient(path=chroma_path)
         self.chroma_collection = self.chroma_client.get_collection(name=self.corpus_config.collection_name)
 

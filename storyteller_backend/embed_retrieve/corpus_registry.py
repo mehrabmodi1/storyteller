@@ -13,6 +13,8 @@ from dataclasses import dataclass, asdict
 from pathlib import Path
 import chromadb
 
+from .paths import provider_chroma_path
+
 
 @dataclass
 class CorpusConfig:
@@ -102,9 +104,9 @@ class CorpusRegistry:
             source_file="raw_texts/The Complete Mahabharata .pdf",
             file_type="pdf",
             collection_name="mahabharata_chunks",
-            cache_dir="data/processed_chunks",  # Use existing flat structure
-            bm25_index_path="data/bm25_index.pkl",  # Use existing BM25 index path
-            chroma_db_path="data/chroma_db", # Default for default corpus
+            cache_dir="data/processed_chunks/mahabharata",
+            bm25_index_path="data/bm25_indexes/mahabharata_bm25.pkl",
+            chroma_db_path="data/chroma_db/mahabharata",
             is_active=True,
             created_at=datetime.now().isoformat(),
             last_processed=datetime.now().isoformat()
@@ -195,8 +197,7 @@ class CorpusRegistry:
         
         # Check if ChromaDB collection exists
         try:
-            from config.settings import settings
-            chroma_path = f"{corpus_config.chroma_db_path}_{settings.provider}"
+            chroma_path = provider_chroma_path(corpus_config.chroma_db_path)
             chroma_client = chromadb.PersistentClient(path=chroma_path)
             collections = chroma_client.list_collections()
             chroma_exists = any(col.name == corpus_config.collection_name for col in collections)

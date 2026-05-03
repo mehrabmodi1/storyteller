@@ -17,7 +17,7 @@ Migrated from src/agent/graph.py
 
 from langgraph.graph import StateGraph, END
 from langchain_core.messages import HumanMessage
-from langchain.chat_models import init_chat_model
+from services.llm import get_chat_llm
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableConfig
 from pydantic import BaseModel, Field
@@ -155,12 +155,7 @@ async def _generate_node_summary(story: str, prompt: str, api_key: str) -> str:
     Returns empty string on any failure — summary is non-critical.
     """
     try:
-        summary_llm = init_chat_model(
-            settings.chat_model,
-            model_provider=settings.langchain_chat_provider,
-            temperature=0,
-            api_key=api_key,
-        )
+        summary_llm = get_chat_llm(temperature=0, api_key=api_key)
         system = (
             "You are a concise story archivist. Summarize the following story chapter "
             "in 2-3 sentences (approximately 100 tokens). Describe the key events and "
@@ -225,9 +220,7 @@ async def _classify_intent(prompt: str, corpus_name: str, api_key: str) -> Promp
     Fails closed: returns fail verdict on any error.
     """
     try:
-        classifier_llm = init_chat_model(
-            settings.chat_model,
-            model_provider=settings.langchain_chat_provider,
+        classifier_llm = get_chat_llm(
             temperature=0,
             api_key=api_key,
         ).with_structured_output(PromptScreenResult)
@@ -296,9 +289,7 @@ def generate_search_query(state: StorytellerState) -> Dict[str, Any]:
         ("user", "{input}")
     ])
     
-    llm_for_query = init_chat_model(
-        settings.chat_model,
-        model_provider=settings.langchain_chat_provider,
+    llm_for_query = get_chat_llm(
         temperature=0,
         api_key=ACTIVE_API_KEY,
     ).with_structured_output(SearchQuery)
@@ -433,9 +424,7 @@ You must explicitly reference how the current chapter connects to the previous c
         ("user", "{input}")
     ])
 
-    story_llm = init_chat_model(
-        settings.chat_model,
-        model_provider=settings.langchain_chat_provider,
+    story_llm = get_chat_llm(
         temperature=0.9,
         streaming=True,
         api_key=ACTIVE_API_KEY,
@@ -596,9 +585,7 @@ def generate_choices(state: StorytellerState) -> Dict[str, Any]:
         ("user", "Please generate three follow-up choices.")
     ])
 
-    choices_llm = init_chat_model(
-        settings.chat_model,
-        model_provider=settings.langchain_chat_provider,
+    choices_llm = get_chat_llm(
         temperature=0.7,
         api_key=ACTIVE_API_KEY,
     ).with_structured_output(Choices)

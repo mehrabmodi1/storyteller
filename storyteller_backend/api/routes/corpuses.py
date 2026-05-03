@@ -197,10 +197,11 @@ async def delete_corpus(name: str, delete_data: bool = False):
             detail=f"Failed to remove corpus from registry: {str(e)}"
         )
     
-    # Optionally delete data files
+    # Optionally delete data files (both provider variants of the chroma dir)
     if delete_data:
         try:
-            shutil.rmtree(corpus.chroma_db_path, ignore_errors=True)
+            for provider_suffix in ("gemini", "openai"):
+                shutil.rmtree(f"{corpus.chroma_db_path}_{provider_suffix}", ignore_errors=True)
             Path(corpus.bm25_index_path).unlink(missing_ok=True)
             shutil.rmtree(corpus.cache_dir, ignore_errors=True)
         except Exception as e:

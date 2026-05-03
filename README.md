@@ -63,7 +63,7 @@ cp .env.example .env
 # Edit .env and add your OPENAI_API_KEY
 
 # Run the server
-python -m uvicorn api.main:app --reload
+poetry run python -m uvicorn api.main:app --reload
 ```
 
 Backend will be available at: http://localhost:8000

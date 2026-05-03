@@ -2,7 +2,7 @@
 Image Generator Service
 
 Handles AI image generation for story chapters:
-- Creates descriptive prompts via init_chat_model (provider-agnostic)
+- Creates descriptive prompts via get_chat_llm (provider-agnostic)
 - Generates images with DALL-E (OpenAI) or Gemini
 """
 
@@ -13,7 +13,7 @@ from uuid import uuid4
 import asyncio
 import base64
 
-from langchain.chat_models import init_chat_model
+from services.llm import get_chat_llm
 
 from config.settings import settings
 
@@ -42,7 +42,7 @@ class ImageGenerator:
         parent_image_prompt: Optional[str] = None
     ) -> Optional[str]:
         """
-        Generate a descriptive image prompt from story text using init_chat_model.
+        Generate a descriptive image prompt from story text using get_chat_llm.
 
         Args:
             story_text: The story chapter text
@@ -62,9 +62,7 @@ Do NOT include any text, labels, or captions in your description."""
             system_content += f"\n\nMaintain visual continuity with the previous image, which was described as: '{parent_image_prompt}'. Ensure characters and locations look consistent, while adhering to the specified artistic style."
 
         try:
-            llm = init_chat_model(
-                settings.chat_model,
-                model_provider=settings.langchain_chat_provider,
+            llm = get_chat_llm(
                 temperature=0,
                 api_key=self.api_key,
                 max_tokens=250,

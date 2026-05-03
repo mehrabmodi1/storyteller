@@ -47,9 +47,9 @@ class TestCheckModeration:
 
 
 class TestClassifyIntent:
-    # _classify_intent calls init_chat_model(...).with_structured_output(PromptScreenResult)
-    # then awaits .ainvoke() on the resulting chain. We must mock the full chain:
-    # init_chat_model() -> mock_llm; mock_llm.with_structured_output() -> mock_chain;
+    # _classify_intent calls get_chat_llm(...).with_structured_output(PromptScreenResult)
+    # then awaits .ainvoke() on the resulting chain. Mock the full chain:
+    # get_chat_llm() -> mock_llm; mock_llm.with_structured_output() -> mock_chain;
     # mock_chain.ainvoke() -> result.
 
     @pytest.mark.asyncio
@@ -61,7 +61,7 @@ class TestClassifyIntent:
         mock_llm = MagicMock()
         mock_llm.with_structured_output = MagicMock(return_value=mock_chain)
 
-        with patch("services.story_agent.init_chat_model", return_value=mock_llm):
+        with patch("services.story_agent.get_chat_llm", return_value=mock_llm):
             result = await _classify_intent(
                 "Tell me about Karna's moral failings", "mahabharata", "test-key"
             )
@@ -77,7 +77,7 @@ class TestClassifyIntent:
         mock_llm = MagicMock()
         mock_llm.with_structured_output = MagicMock(return_value=mock_chain)
 
-        with patch("services.story_agent.init_chat_model", return_value=mock_llm):
+        with patch("services.story_agent.get_chat_llm", return_value=mock_llm):
             result = await _classify_intent(
                 "Make Draupadi look stupid", "mahabharata", "test-key"
             )

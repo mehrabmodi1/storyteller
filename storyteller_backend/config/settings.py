@@ -8,6 +8,8 @@ Storyteller Backend Configuration
 from pydantic_settings import BaseSettings
 from typing import Optional, List, Literal
 from pathlib import Path
+from enum import StrEnum
+from dataclasses import dataclass
 
 
 # ============================================
@@ -40,6 +42,61 @@ class Secrets(BaseSettings):
 
 
 # ============================================
+# PROVIDER PROFILES
+# ============================================
+
+class Provider(StrEnum):
+    GEMINI = "gemini"
+    OPENAI = "openai"
+
+
+@dataclass(frozen=True)
+class ProviderProfile:
+    """All per-provider settings bundled in one place.
+
+    Adding a new provider = add one entry to PROVIDER_PROFILES below.
+    """
+    chat_model: str
+    embedding_model: str
+    image_model: str
+    image_size: str
+    chat_rpm: int
+    embedding_rpm: int
+    langchain_chat_provider: str       # provider key for langchain.init_chat_model
+    langchain_embeddings_provider: str  # provider key for langchain embeddings
+    image_quality: Optional[str] = None  # OpenAI-only
+    # 0 disables Gemini's internal reasoning so output tokens aren't consumed by it.
+    # None = use SDK default (applicable to providers without thinking).
+    thinking_budget: Optional[int] = None
+
+
+PROVIDER_PROFILES: dict[Provider, ProviderProfile] = {
+    Provider.GEMINI: ProviderProfile(
+        chat_model="gemini-2.5-flash-lite",  # temp: higher free-tier RPD; revert to gemini-2.5-flash when billing enabled
+        embedding_model="gemini-embedding-001",
+        image_model="gemini-2.5-flash-image",
+        image_size="1K",
+        chat_rpm=5,        # Free tier: 5 requests/min
+        embedding_rpm=20,  # Conservative: avoids 429s on free tier
+        langchain_chat_provider="google_genai",
+        langchain_embeddings_provider="google_genai",
+        thinking_budget=0,  # gemini-2.5-flash thinking eats output budget; disable
+    ),
+    Provider.OPENAI: ProviderProfile(
+        chat_model="gpt-4o-mini",
+        embedding_model="text-embedding-3-small",
+        image_model="dall-e-2",
+        image_size="256x256",
+        chat_rpm=0,        # 0 = no throttle
+        embedding_rpm=0,   # 0 = no throttle
+        langchain_chat_provider="openai",
+        langchain_embeddings_provider="openai",
+        image_quality="standard",
+    ),
+}
+
+
+# ============================================
 # CONFIGURATION (hardcoded, not from .env)
 # ============================================
 
@@ -54,25 +111,8 @@ class Config:
     api_port: int = 8000
     api_reload: bool = True
 
-    # Active provider
-    provider: Literal["gemini", "openai"] = "gemini"
-
-    # Gemini Models
-    gemini_chat_model: str = "gemini-2.5-flash"
-    gemini_embedding_model: str = "gemini-embedding-001"
-    gemini_image_model: str = "gemini-2.5-flash-image"
-    gemini_image_size: str = "1K"
-    gemini_chat_rpm: int = 5       # Free tier: 5 requests/min
-    gemini_embedding_rpm: int = 20   # Conservative: avoids 429s on free tier
-
-    # OpenAI Models
-    openai_chat_model: str = "gpt-4o-mini"
-    openai_embedding_model: str = "text-embedding-3-small"
-    openai_image_model: str = "dall-e-2"
-    openai_image_size: str = "256x256"
-    openai_image_quality: str = "standard"
-    openai_chat_rpm: int = 0       # 0 = no throttle
-    openai_embedding_rpm: int = 0  # 0 = no throttle
+    # Active provider — toggle here to switch between Gemini / OpenAI
+    provider: Provider = Provider.GEMINI
 
     # Data Paths (relative to storyteller_backend/)
     data_dir: str = "../data"
@@ -103,21 +143,6 @@ class Config:
 
 
 # ============================================
-# PROVIDER MAPPINGS
-# ============================================
-
-_LANGCHAIN_CHAT_PROVIDER = {
-    "gemini": "google_genai",
-    "openai": "openai",
-}
-
-_LANGCHAIN_EMBEDDINGS_PROVIDER = {
-    "gemini": "google_genai",
-    "openai": "openai",
-}
-
-
-# ============================================
 # COMBINED SETTINGS
 # ============================================
 
@@ -136,15 +161,19 @@ class Settings:
         self._config = Config()
         self.__validate_api_key()
 
+    @property
+    def _profile(self) -> ProviderProfile:
+        return PROVIDER_PROFILES[self._config.provider]
+
     def __validate_api_key(self):
         """Raise ValueError if the active provider's API key is missing."""
         provider = self._config.provider
-        if provider == "gemini" and not self._secrets.gemini_api_key:
+        if provider is Provider.GEMINI and not self._secrets.gemini_api_key:
             raise ValueError(
                 "GEMINI_API_KEY is required when provider is 'gemini'. "
                 "Set it in your .env file."
             )
-        if provider == "openai" and not self._secrets.openai_api_key:
+        if provider is Provider.OPENAI and not self._secrets.openai_api_key:
             raise ValueError(
                 "OPENAI_API_KEY is required when provider is 'openai'. "
                 "Set it in your .env file."
@@ -154,53 +183,51 @@ class Settings:
     # Provider resolution
     # ============================================
     @property
-    def provider(self) -> str:
+    def provider(self) -> Provider:
         return self._config.provider
 
     @property
     def langchain_chat_provider(self) -> str:
-        return _LANGCHAIN_CHAT_PROVIDER[self._config.provider]
+        return self._profile.langchain_chat_provider
 
     @property
     def langchain_embeddings_provider(self) -> str:
-        return _LANGCHAIN_EMBEDDINGS_PROVIDER[self._config.provider]
+        return self._profile.langchain_embeddings_provider
 
     # ============================================
-    # Model resolution (based on active provider)
+    # Model resolution (delegated to active profile)
     # ============================================
     @property
     def chat_model(self) -> str:
-        p = self._config.provider
-        return self._config.gemini_chat_model if p == "gemini" else self._config.openai_chat_model
+        return self._profile.chat_model
 
     @property
     def embedding_model(self) -> str:
-        p = self._config.provider
-        return self._config.gemini_embedding_model if p == "gemini" else self._config.openai_embedding_model
+        return self._profile.embedding_model
 
     @property
     def image_model(self) -> str:
-        p = self._config.provider
-        return self._config.gemini_image_model if p == "gemini" else self._config.openai_image_model
+        return self._profile.image_model
 
     @property
     def image_size(self) -> str:
-        p = self._config.provider
-        return self._config.gemini_image_size if p == "gemini" else self._config.openai_image_size
+        return self._profile.image_size
 
     @property
-    def image_quality(self) -> str:
-        return self._config.openai_image_quality
+    def image_quality(self) -> Optional[str]:
+        return self._profile.image_quality
 
     @property
     def chat_rpm(self) -> int:
-        p = self._config.provider
-        return self._config.gemini_chat_rpm if p == "gemini" else self._config.openai_chat_rpm
+        return self._profile.chat_rpm
 
     @property
     def embedding_rpm(self) -> int:
-        p = self._config.provider
-        return self._config.gemini_embedding_rpm if p == "gemini" else self._config.openai_embedding_rpm
+        return self._profile.embedding_rpm
+
+    @property
+    def thinking_budget(self) -> Optional[int]:
+        return self._profile.thinking_budget
 
     # ============================================
     # API Keys
@@ -208,7 +235,7 @@ class Settings:
     @property
     def api_key(self) -> str:
         """Return the active provider's API key."""
-        if self._config.provider == "gemini":
+        if self._config.provider is Provider.GEMINI:
             return self._secrets.gemini_api_key
         return self._secrets.openai_api_key
 
