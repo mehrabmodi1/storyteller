@@ -1,115 +1,281 @@
-# Storyteller Project: Manual Setup and Architecture Guide
+# Storyteller — Architecture & Developer Guide
 
-This document provides a comprehensive guide to setting up and running the Storyteller project locally. It also offers a deep dive into the system's architecture for developers who wish to understand, modify, or contribute to the project.
+This document is a deeper companion to the [README](../README.md). The README covers how to run the app; this doc covers **how the system is put together**: the layers, the data flow, the conventions, and the extension points. Read this if you intend to modify backend code, add a provider, ingest a new corpus, or debug an unusual failure.
 
-## 1. Project Overview
+For setup instructions (Poetry, npm, `.env`, run commands), see the [README Quick Start](../README.md#quick-start).
 
-Storyteller is a generative AI application that creates interactive, branching narratives. Users can guide the story by making choices, and the application will dynamically generate new story chapters, complete with unique, stylized images. The experience is further customizable through different storyteller "personas," each with a distinct voice, theme, and narrative style.
+---
 
-## 2. Core Features
+## Table of contents
 
-- **Interactive Branching Narrative:** The story is presented as a graph that grows as the user makes choices, creating a unique journey every time.
-- **Adaptable Source Material:** The project can be adapted to any text-based source material. The `embed_retrieve` system can process any raw text, create a vector database, and allow the AI to generate stories based on it.
-- **Dynamic Image Generation:** Each story chapter is accompanied by a unique, AI-generated image that reflects the mood and content of the text.
-- **Customizable Personas:** Users can select from various storyteller personas (e.g., Grandmother, Pirate, Freud), each with a unique system prompt, color theme, and AI temperature setting.
-- **In-Place Editing:** Users can edit their choices directly within the graph before submitting them.
-- **Real-time Streaming:** Story text is streamed from the backend to the frontend token-by-token, providing a responsive user experience.
-- **Configurable Storytelling:** Key parameters, such as image generation and story length, can be easily toggled or adjusted in a configuration file.
+1. [System overview](#1-system-overview)
+2. [Backend layers](#2-backend-layers)
+3. [Story-generation flow (LangGraph)](#3-story-generation-flow-langgraph)
+4. [Provider abstraction](#4-provider-abstraction)
+5. [Corpus ingestion pipeline](#5-corpus-ingestion-pipeline)
+6. [Hybrid retrieval](#6-hybrid-retrieval)
+7. [Frontend architecture](#7-frontend-architecture)
+8. [Extension points](#8-extension-points)
+9. [Common gotchas](#9-common-gotchas)
 
-## 3. System Architecture
+---
 
-The project is a full-stack application composed of a Python backend and a Next.js frontend.
+## 1. System overview
 
-### Backend (`src/agent/`)
+Storyteller is a **dual-project monorepo** with two independently-runnable services:
 
-The backend is built with Python, using **FastAPI** to serve the API and **LangGraph** to manage the AI agent's logic.
+- `storyteller_backend/` — FastAPI + LangGraph + ChromaDB (Python 3.12, Poetry)
+- `storyteller_frontend/` — React + Vite + ReactFlow (Node 18+, npm)
 
-- **State Management (`state.py`):** Defines the `StorytellerState`, which is a graph-like structure that tracks the entire application state, including the story graph, user messages, and configuration settings.
-- **Agent Graph (`graph.py`):** This is the core of the backend. It uses `LangGraph` to define a cyclical process where different nodes are responsible for specific tasks:
-    1.  `generate_search_query`: Creates a targeted search query from the user's prompt.
-    2.  `retrieve_chunks`: Fetches relevant text chunks from a vector database (not covered in this guide).
-    3.  `generate_story`: Streams the story text to the frontend. Once enough text is available, it concurrently triggers image generation.
-    4.  `generate_choices`: Creates three follow-up choices for the user.
-    5.  `update_graph_*`: The `networkx` graph is updated with the new story and choice nodes.
-- **Server (`server.py`):** Exposes the API endpoints. The primary endpoint is `/api/story`, which uses Server-Sent Events (SSE) to stream the story chunks and, finally, the full `networkx` graph data to the frontend.
-- **Configuration (`config.py`):** A centralized file for managing all key parameters, such as AI model names, image generation settings, and retriever configurations.
+They communicate over HTTP/SSE. The backend persists user journeys to `saved_graphs/` (JSON) and reads pre-built corpora from `data/`.
 
-### Vector Database (`src/embed_retrieve/`)
+```
+User -> Frontend (3000) -SSE-> Backend (8000) -> Provider API (Gemini / OpenAI)
+                                       |
+                                       +-- ChromaDB (data/chroma_db/<corpus>_<provider>/)
+                                       +-- BM25 index (data/bm25_indexes/<corpus>_bm25)
+```
 
-To provide relevant context to the storyteller AI, the application uses a vector database of source material. This component is responsible for creating and querying that database.
+Each turn = one user prompt -> one new "story node" + three "choice nodes" appended to a `networkx` graph that the frontend renders with ReactFlow.
 
-- **Database Builder (`build_database.py`):** This script processes raw text files, chunks them into smaller, semantically coherent pieces, generates embeddings for each chunk using an OpenAI model, and stores them in a FAISS vector database. It's a one-time setup process to prepare the source material.
-- **Retriever (`retriever.py`):** This module provides the `HybridRetriever`, which is used by the agent graph. When the agent generates a search query, the retriever uses it to find the most relevant text chunks from the vector database, which are then used as context for generating the story.
+---
 
-### Frontend (`src/app/`)
+## 2. Backend layers
 
-The frontend is a **Next.js** and **React** application that provides the user interface.
+```
+storyteller_backend/
+├── api/                        # FastAPI surface
+│   ├── main.py                 # App + uvicorn entry; mounts static images
+│   ├── dependencies.py         # Singletons (graph state, etc.)
+│   └── routes/
+│       ├── stories.py          # POST /api/stream_story — main SSE endpoint
+│       ├── journeys.py         # CRUD on saved graphs
+│       ├── personas.py         # CRUD on personas
+│       ├── corpuses.py         # CRUD + status on corpora
+│       └── auth.py             # Per-request key validation
+├── services/
+│   ├── story_agent.py          # LangGraph state machine (the heart)
+│   ├── image_generator.py      # DALL-E 2 / Gemini image routing
+│   ├── llm.py                  # get_chat_llm() — single chat-model factory
+│   └── auth_service.py         # Provider-aware auth (e.g. OpenAI moderation)
+├── embed_retrieve/
+│   ├── build_database.py       # Corpus ingestion CLI + builder class
+│   ├── retriever.py            # HybridRetriever (BM25 + Chroma + RRF)
+│   ├── corpus_registry.py      # Loads/saves data/corpus_registry.json
+│   ├── manage_corpuses.py      # CLI: list / add / build corpora
+│   ├── paths.py                # Shared provider_chroma_path() helper
+│   └── config.py               # Chunking/context constants (CHUNK_SIZE, CACHE_DIR, …)
+├── models/
+│   ├── api_models.py           # Pydantic request/response models
+│   └── chunk.py                # Chunk + DocumentPosition
+├── config/
+│   ├── settings.py             # Provider enum, profiles, all knobs
+│   ├── personas.json           # Six personas + system prompts + colour themes
+│   └── .env(.example)          # Secrets only (API keys)
+└── tests/                      # pytest
+```
 
-- **UI Framework:** **React Flow** is used to render the interactive, branching graph of the story.
-- **Styling:** **Tailwind CSS** is used for styling, with persona-specific themes dynamically applied to the UI.
-- **State Management:** React hooks (`useState`, `useEffect`, `useCallback`) are used to manage the application's state, including the graph's nodes and edges, user input, and loading states.
-- **Communication:** The frontend communicates with the backend via the `/api/story` endpoint. It listens for `story_chunk` events to display the streaming story in a modal and then receives the final graph data to render the new nodes.
-- **Image Preloading:** To ensure a smooth user experience, the frontend preloads all images in the background before rendering the graph, preventing jarring layout shifts.
+**Boundary rules:**
+- `config/settings.py` does not import from `services/` or `embed_retrieve/`.
+- `services/` and `embed_retrieve/` may import from `config/`.
+- `api/` is the only layer that imports from FastAPI.
+- API keys are read **only** from `.env` via `Secrets(BaseSettings)`. Everything else (model names, RPMs, paths) is hard-coded in `Config` / `PROVIDER_PROFILES`.
 
-## 4. Manual Setup Guide
+---
 
-Follow these steps to set up and run the Storyteller project on your local machine.
+## 3. Story-generation flow (LangGraph)
 
-### Prerequisites
+Every `/api/stream_story` request walks the same LangGraph state machine, defined in [`services/story_agent.py`](../storyteller_backend/services/story_agent.py):
 
--   Python 3.12 or later
--   Node.js v18.0 or later
--   An OpenAI API key
+```
+start
+  |
+  v
+screen_prompt              # safety classifier + (OpenAI moderation if available)
+  |
+  v
+build_path_context         # walk the existing graph, summarise the journey so far
+  |
+  v
+generate_search_query      # structured-output: SearchQuery
+  |
+  v
+retrieve_chunks            # HybridRetriever.search() — BM25 + Chroma fused
+  |
+  v
+generate_story             # STREAMING; emits chunks over SSE
+  |                            \
+  v                             > on text-threshold, image_generator runs in parallel
+update_graph_with_story        /
+  |
+  v
+generate_choices           # structured-output: Choices (3 follow-ups)
+  |
+  v
+update_graph_with_choices
+  |
+  v
+end -> SSE final message: full serialized graph
+```
 
-### Backend Setup
+Notable details:
 
-1.  **Clone the Repository:**
-    ```bash
-    git clone <your-repository-url>
-    cd storyteller
-    ```
+- **Streaming.** `generate_story` uses `astream`, and the upstream FastAPI route ([`api/routes/stories.py`](../storyteller_backend/api/routes/stories.py)) listens to `astream_events("v1")` and forwards `on_chat_model_stream` events to the SSE channel. The frontend renders text token-by-token.
+- **Image gen runs in parallel.** As soon as ~25% of the expected story length has streamed in, image generation kicks off as an `asyncio.Task` so it overlaps with the rest of the story emission.
+- **Structured output.** `screen_prompt`, `generate_search_query`, and `generate_choices` use Pydantic models via `.with_structured_output(Schema)`. Provider-native JSON mode is used where supported.
+- **Persona injection.** The selected persona's `system_prompt` is interpolated into the chat prompt template before grounding constraints are appended last (so persona prompts can't override grounding rules).
 
-2.  **Create and Activate a Virtual Environment:**
-    ```bash
-    python -m venv .venv
-    source .venv/bin/activate
-    # On Windows, use: .venv\\Scripts\\activate
-    ```
+---
 
-3.  **Install Python Dependencies:**
-    ```bash
-    pip install -r requirements.txt
-    ```
+## 4. Provider abstraction
 
-4.  **Set Up Environment Variables:**
-    Create a file named `.env` in the project's root directory and add your OpenAI API key:
-    ```
-    OPENAI_API_KEY="your-key-here"
-    ```
-5. **Database**
-    Make sure you have the database in `data` directory at the root level of the project. Please contact the maintainer for the database or you can choose to build your own database using your preferred data.
+Lives in [`config/settings.py`](../storyteller_backend/config/settings.py). Three pieces:
 
-6.  **Run the Backend Server:**
-    From the project root, run the following command:
-    ```bash
-    python -m uvicorn src.agent.server:app --reload
-    ```
-    The backend server will be running at `http://localhost:8000`.
+```python
+class Provider(StrEnum):
+    GEMINI = "gemini"
+    OPENAI = "openai"
 
-### Frontend Setup
+@dataclass(frozen=True)
+class ProviderProfile:
+    chat_model: str
+    embedding_model: str
+    image_model: str
+    image_size: str
+    chat_rpm: int
+    embedding_rpm: int
+    langchain_chat_provider: str
+    langchain_embeddings_provider: str
+    image_quality: Optional[str] = None      # OpenAI-only
+    thinking_budget: Optional[int] = None    # Gemini-only
 
-1.  **Navigate to the Frontend Directory:**
-    ```bash
-    cd src/app
-    ```
+PROVIDER_PROFILES: dict[Provider, ProviderProfile] = { ... }
+```
 
-2.  **Install Node.js Dependencies:**
-    ```bash
-    npm install
-    ```
+The active provider is set on `Config.provider`. `Settings.chat_model`, `Settings.embedding_model`, etc. delegate to `PROVIDER_PROFILES[active]`. Switching providers is one assignment.
 
-3.  **Run the Frontend Development Server:**
-    ```bash
-    npm run dev
-    ```
-    The frontend application will be running at `http://localhost:3000`. You can now open this URL in your browser to use the application. 
+**Why `thinking_budget=0` is set for Gemini:** `gemini-2.5-flash` defaults to thinking mode, which consumes ~1500 reasoning tokens before any visible output. With our default `max_tokens=1200` for stories, the entire budget got eaten by thinking → ~40-word truncated stories. Setting `thinking_budget=0` disables that.
+
+The single chat-model construction site is [`services/llm.py:get_chat_llm()`](../storyteller_backend/services/llm.py). All seven `init_chat_model` callers go through it. It auto-applies the provider's `thinking_budget` so callers don't need to know.
+
+**Adding a third provider:**
+1. Add a new `Provider` enum member.
+2. Add a new entry to `PROVIDER_PROFILES`.
+3. If the provider needs special wiring inside `get_chat_llm`, branch there.
+4. Wire any provider-specific image-gen path inside [`services/image_generator.py`](../storyteller_backend/services/image_generator.py).
+5. Add an API key field to `Secrets`.
+
+---
+
+## 5. Corpus ingestion pipeline
+
+Defined in [`embed_retrieve/build_database.py`](../storyteller_backend/embed_retrieve/build_database.py). The pipeline is **provider-aware** (chunks land in `data/chroma_db/<corpus>_<provider>/`) and **resumable** at every phase.
+
+```
+phase 1: chunk + summarise (chat)
+   PDF -> PyMuPDF -> tiktoken chunks
+                          |
+                          v
+                    chat: contextual summary (per chunk)
+                          |
+                          v
+              cache JSON to data/processed_chunks/<corpus>/
+   (skipped entirely if cache exists)
+
+phase 2: embed (vectors)
+   for each cached chunk:
+     if id already in Chroma collection -> skip
+     else -> embed via provider, upsert into Chroma
+   rate-limited at chat_rpm / embedding_rpm
+
+phase 3: BM25 (provider-agnostic)
+   read data/processed_chunks/<corpus>/
+   build BM25Okapi over all chunk texts
+   write data/bm25_indexes/<corpus>_bm25
+```
+
+Cost per phase:
+- **Phase 1:** N chat calls (one per chunk) — only on first build of a new corpus
+- **Phase 2:** N embedding calls — runs every time you ingest under a new provider
+- **Phase 3:** zero API calls — local indexing
+
+The CLI:
+
+```bash
+poetry run python -m embed_retrieve.build_database --corpus <name> [--force-rebuild]
+poetry run python -m embed_retrieve.manage_corpuses build <name>
+poetry run python -m embed_retrieve.manage_corpuses list
+poetry run python -m embed_retrieve.manage_corpuses add <name> <display> <desc> <source.pdf>
+```
+
+Failure modes:
+- **Daily quota hit (HTTP 429 with `PerDay` in message)** → builder logs a notice and re-raises. Re-run any time after midnight (PT) and phase 2 picks up where it left off.
+- **Per-minute rate limit (`429` with `retry in Ns`)** → builder backs off and retries automatically up to `MAX_RETRIES=3`.
+- **Network blips** → standard exception, caller decides. Re-run is safe (idempotent upsert).
+
+---
+
+## 6. Hybrid retrieval
+
+[`embed_retrieve/retriever.py`](../storyteller_backend/embed_retrieve/retriever.py) implements `HybridRetriever`, which fuses two ranked lists:
+
+1. **BM25** — keyword scoring against the full chunk text (`Context: ... Text: ...`).
+2. **Vector** — semantic similarity via the active provider's embeddings, queried against the per-corpus Chroma collection.
+
+The two ranked lists are merged via **Reciprocal Rank Fusion** (`rrf_k = 60`), and the top-K (default 10) chunks are returned. Both lists' weights are configurable in `settings.py` (`bm25_weight`, `semantic_weight`, `retrieval_top_k`).
+
+Path resolution goes through [`embed_retrieve/paths.py:provider_chroma_path()`](../storyteller_backend/embed_retrieve/paths.py) — the same helper the build script uses, so writer and reader can never disagree on layout.
+
+---
+
+## 7. Frontend architecture
+
+```
+storyteller_frontend/src/
+├── App.tsx                # Top-level layout
+├── context/AppContext.tsx # Global state (current persona/corpus, journey list, etc.)
+├── components/
+│   ├── graph/             # ReactFlow nodes (StoryNode, ChoiceNode), edges, controls
+│   ├── dropdowns/         # Persona / Corpus pickers
+│   └── debug/             # Dev panels
+├── hooks/
+│   ├── useSSE.ts          # SSE client wrapping /api/stream_story
+│   ├── useELKLayout.ts    # ELK-based graph layout
+│   └── useLocalStorage.ts # Persist UI prefs
+└── services/api.ts        # All HTTP calls to the backend
+```
+
+**State flow on a new story turn:**
+1. User submits prompt → `useSSE` opens a stream against `/api/stream_story`.
+2. Tokens arrive → progressively populate a draft "story" node in modal/overlay.
+3. Final SSE message contains the full serialized graph (nodes + edges) → React commits it via `setGraph`.
+4. ELK lays out the new graph; ReactFlow renders.
+
+---
+
+## 8. Extension points
+
+| Goal | Where to start |
+|---|---|
+| Add a new provider | `Provider` enum + `PROVIDER_PROFILES` in `config/settings.py`; review `services/llm.py` and `services/image_generator.py` for provider branches |
+| Add a new corpus | `manage_corpuses.py add ...` then `build_database.py --corpus <name>` |
+| Add a new persona | Append to `config/personas.json` — pick a unique color theme |
+| Add a graph node | Define the node fn in `services/story_agent.py`, wire it into the StateGraph in `_build_workflow()` |
+| Add an API endpoint | New file in `api/routes/`, mount it in `api/main.py` |
+| Tune retrieval | `bm25_weight`, `semantic_weight`, `retrieval_top_k` in `Config` |
+| Tune chunking | `CHUNK_SIZE`, `CHUNK_OVERLAP`, `CONTEXT_WINDOW_SIZE` in `embed_retrieve/config.py` (note: changing chunking invalidates existing summary caches) |
+
+---
+
+## 9. Common gotchas
+
+- **`chromadb` version drift permanently destroys vector data.** Always use `poetry install`. Never `pip install`.
+- **Backend cwd matters.** `embed_retrieve/config.py:CACHE_DIR` is a relative path (`../data/processed_chunks`). Run backend commands from `storyteller_backend/`.
+- **Ingesting under a new provider doesn't reuse old vectors.** Each provider's embeddings live in `<corpus>_<provider>/`. Switching providers means re-running phase 2 of the build for each corpus you want to use.
+- **Free-tier image-gen on Gemini is 0/day.** Stories will still complete; image generation will silently no-op (the exception is caught and logged).
+- **`gemini-2.5-flash` thinking mode**: handled automatically via `thinking_budget=0` in the Gemini profile. If you ever construct a chat model directly without going through `services/llm.py`, replicate that setting or expect truncated output.
+- **The interactive scripts at `embed_retrieve/test_build.py` and `embed_retrieve/test_retriever.py` are stale** — they predate the current builder API. Use the `pytest tests/` suite for automation.
+
+---
+
+For the user-facing setup walkthrough, see the [README](../README.md). For the (historical) project plan and roadmap, see [`next_steps.md`](next_steps.md).

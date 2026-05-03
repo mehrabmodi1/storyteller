@@ -72,7 +72,12 @@ class ProviderProfile:
 
 PROVIDER_PROFILES: dict[Provider, ProviderProfile] = {
     Provider.GEMINI: ProviderProfile(
-        chat_model="gemini-2.5-flash-lite",  # temp: higher free-tier RPD; revert to gemini-2.5-flash when billing enabled
+        # Default to flash-lite on free tier for higher daily request quota.
+        # gemini-2.5-flash produces noticeably richer stories but caps at ~20
+        # requests/day on free tier (each journey burns ~6 chat calls), so
+        # only ~3 stories/day. Switch to "gemini-2.5-flash" once billing is
+        # enabled, or if richer stories matter more than story volume.
+        chat_model="gemini-2.5-flash-lite",
         embedding_model="gemini-embedding-001",
         image_model="gemini-2.5-flash-image",
         image_size="1K",

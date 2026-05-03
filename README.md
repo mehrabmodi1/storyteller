@@ -1,218 +1,303 @@
-# Storyteller - Generative Interactive Narratives
+# Storyteller — Generative Interactive Narratives
 
-An AI-powered storytelling application that creates branching, interactive narratives from classic literature and custom text corpuses. Built with LangGraph, FastAPI, and React.
+An AI-powered storytelling app that turns classic literature (or any text corpus) into a branching, interactive narrative. Users guide the story through choices; each chapter is grounded in retrieved source material and optionally illustrated.
 
-## What is Storyteller?
+Built with **LangGraph + FastAPI** (backend) and **React + Vite + ReactFlow** (frontend). Supports Google **Gemini** (free tier available) and **OpenAI** as interchangeable providers for chat / embeddings / images.
 
-Storyteller generates unique, branching narratives where users guide the story through choices. Each story chapter is accompanied by AI-generated images in an impressionist style. The application uses RAG (Retrieval-Augmented Generation) to ground stories in source material while maintaining creative freedom.
+---
 
-**Key Features:**
-- Branching narrative graphs that grow with user choices
-- DALL-E 3 generated images for each chapter
-- Multiple text corpuses (Mahabharata, Odyssey, Arabian Nights, etc.)
-- 5 storyteller personas with unique voices
-- Save and reload story journeys
-- Real-time streaming story generation
+## What it does
 
-## Project Structure
+- Generates a branching narrative graph that grows as the user picks choices
+- Streams story text token-by-token via SSE
+- Generates an illustration for each chapter (DALL-E 2 or Gemini image)
+- Grounds every chapter in retrieved source-text chunks (hybrid BM25 + vector search via ChromaDB)
+- Saves journeys; reload them later
+- Six built-in storyteller personas with distinct voices and themes
 
-This is a **dual-project monorepo** with independently deployable backend and frontend:
+---
+
+## Tech stack
+
+- **Backend:** Python 3.12, Poetry, FastAPI + uvicorn (port `8000`), LangGraph, LangChain, ChromaDB, `rank-bm25`
+- **Frontend:** React 18, Vite (port `3000`, HMR), TypeScript, ReactFlow, Tailwind CSS
+- **Providers:** Gemini (default, free tier) or OpenAI (paid)
+
+---
+
+## Project structure
 
 ```
 storyteller/
-├── storyteller_backend/      # Python FastAPI backend
-├── storyteller_frontend/     # React/Vite frontend (coming in Phase 2)
-├── data/                     # Shared: Vector databases, embeddings
-├── saved_graphs/             # Shared: User story journeys
-├── src/                      # Legacy code (reference only)
-└── documentation/            # Project documentation
+├── pyproject.toml          # Poetry deps (Python)
+├── poetry.lock
+├── storyteller_backend/
+│   ├── api/                # FastAPI entry point + routes (stories, journeys, personas, corpuses)
+│   ├── services/           # LangGraph story agent, image generator, chat-model factory
+│   ├── embed_retrieve/     # Corpus ingestion + retrieval (build_database.py, retriever.py)
+│   ├── models/             # Pydantic models
+│   ├── config/             # settings.py, personas.json, .env(.example)
+│   └── tests/              # pytest suite
+├── storyteller_frontend/
+│   ├── package.json
+│   └── src/                # App.tsx, components/, hooks/, services/api.ts
+├── data/
+│   ├── chroma_db/          # Per-corpus, per-provider vector DBs (gitignored)
+│   ├── bm25_indexes/       # Per-corpus BM25 indexes (gitignored)
+│   ├── processed_chunks/   # Per-corpus chunk caches (gitignored)
+│   └── corpus_registry.json  # Tracked: per-corpus paths
+├── raw_texts/              # Source PDFs / text files (gitignored)
+├── saved_graphs/           # User journey JSONs (gitignored)
+├── documentation/
+│   ├── MANUAL_SETUP.md
+│   └── next_steps.md
+└── CLAUDE.md               # Developer guide for AI assistants
 ```
 
-### Backend (`storyteller_backend/`)
-- **Tech Stack:** Python 3.11+, FastAPI, LangGraph, LangChain, ChromaDB
-- **Purpose:** Story generation agent, corpus retrieval, API server
-- **Independent deployment:** Can be deployed separately to Railway, Render, etc.
+---
 
-### Frontend (`storyteller_frontend/`) - Phase 2
-- **Tech Stack:** React 19, Vite, TypeScript, ReactFlow, Tailwind CSS
-- **Purpose:** Graph visualization, user interface
-- **Independent deployment:** Can be deployed separately to Vercel, Netlify, etc.
-
-## Quick Start
+## Quick start
 
 ### Prerequisites
-- Python 3.11 or later
-- Node.js 18.0 or later (for frontend, Phase 2)
-- OpenAI API key ([get one here](https://platform.openai.com/api-keys))
 
-### 1. Backend Setup
+- **Python 3.12+**
+- **Poetry 2.x** ([install](https://python-poetry.org/docs/#installation))
+- **Node.js 18+**
+- A provider API key — pick one:
+  - **[Gemini](https://aistudio.google.com/apikey)** — free tier, no card required (recommended for first-time setup)
+  - **[OpenAI](https://platform.openai.com/api-keys)** — paid, full functionality (images included)
+
+### 1. Backend setup
 
 ```bash
-# Navigate to backend
 cd storyteller_backend
+poetry install
 
-# Create virtual environment
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Configure environment
+# Configure secrets
 cp .env.example .env
-# Edit .env and add your OPENAI_API_KEY
-
-# Run the server
-poetry run python -m uvicorn api.main:app --reload
+# Edit .env and set GEMINI_API_KEY (and/or OPENAI_API_KEY)
 ```
 
-Backend will be available at: http://localhost:8000
+> **Important:** dependencies are managed by Poetry. Do **not** run `pip install` — version drift in `chromadb` will silently destroy embedded vector data.
 
-API documentation: http://localhost:8000/docs
-
-### 2. Frontend Setup (Phase 2 - Coming Soon)
+### 2. Frontend setup
 
 ```bash
-# Navigate to frontend
 cd storyteller_frontend
-
-# Install dependencies
 npm install
-
-# Configure environment
-cp .env.local.example .env.local
-# Edit .env.local to set API URL
-
-# Run development server
-npm run dev
 ```
 
-Frontend will be available at: http://localhost:3000
+### 3. Run
 
-## Documentation
+In two terminals:
 
-- **[MANUAL_SETUP.md](documentation/MANUAL_SETUP.md)** - Detailed setup instructions
-- **[next_steps.md](documentation/next_steps.md)** - Implementation plan and architecture decisions
-- **Backend README** - `storyteller_backend/README.md` (coming soon)
-- **Frontend README** - `storyteller_frontend/README.md` (Phase 2)
+```bash
+# Terminal 1 — backend (port 8000)
+cd storyteller_backend && poetry run python -m api.main
 
-## Available Corpuses
+# Terminal 2 — frontend (port 3000, HMR)
+cd storyteller_frontend && npm run dev
+```
 
-The system currently includes 6 pre-processed text corpuses:
+Verify:
 
-1. **The Mahabharata** - Ancient Indian epic
-2. **The Odyssey** - Homer's classic Greek epic
-3. **The Arabian Nights** - Collection of Middle Eastern folk tales
-4. **The Volsunga Saga** - Norse legendary saga
-5. **The Jataka Tales** - Buddhist birth stories
-6. **Locus Platform Documentation** - Technical documentation example
+```bash
+curl http://localhost:8000/health    # → {"status": "healthy", ...}
+open http://localhost:3000           # Storyteller UI
+```
 
-### Adding New Corpuses
+API docs: <http://localhost:8000/docs>
 
-See `documentation/next_steps.md` for instructions on ingesting custom text files.
+---
 
-## Storyteller Personas
+## Choosing a provider
 
-Choose from 5 distinct storyteller personalities:
+The default provider is **Gemini** (free tier, no billing required). You can switch to OpenAI in one line.
 
-- **Grandmother** - Warm, nurturing, traditional storytelling
-- **Scholar** - Analytical, educational, contextual
-- **Poet** - Lyrical, metaphorical, artistic
-- **Historian** - Factual, chronological, detailed
-- **Mystic** - Spiritual, symbolic, philosophical
+The active provider is set in [`storyteller_backend/config/settings.py`](storyteller_backend/config/settings.py):
 
-Each persona has a unique color theme and narrative voice.
+```python
+class Config:
+    provider: Provider = Provider.GEMINI   # or Provider.OPENAI
+```
 
-## Architecture
+Each provider's models, RPM, and other knobs are bundled in the `PROVIDER_PROFILES` dict in the same file. Switching providers automatically swaps `chat_model`, `embedding_model`, `image_model`, and rate limits.
 
-### Self-Hosted Deployment (Current - Phase 1)
-Users run both backend and frontend locally with their own OpenAI API keys.
+### Gemini (free tier — default)
 
-### Hybrid Deployment (Future - Phase 2+)
-- Backend deployed to cloud (Railway, Render, AWS Lambda)
-- Frontend runs locally OR deployed to Vercel/Netlify
-- Users configure frontend to point to deployed backend URL
+**What works on free tier:**
+- ✅ Chat / story generation (`gemini-2.5-flash-lite` by default — see note below)
+- ✅ Embeddings (`gemini-embedding-001`)
+- ❌ **Image generation requires billing-enabled** — free-tier quota is `0`. Stories will still generate; just no images.
 
-### Authentication Modes
-- **Phase 1:** Self-hosted (API key in `.env` file)
-- **Phase 2+:** Per-request key (key sent in HTTP headers)
-- **Phase 3+:** Credit system (users buy credits, platform manages OpenAI)
+**Observed daily quotas (free tier, per-project):**
 
-See `documentation/next_steps.md` for detailed architecture discussion.
+| Resource | Limit |
+|---|---|
+| `gemini-2.5-flash` chat requests | ~20 / day |
+| `gemini-2.5-flash-lite` chat requests | substantially higher (200+) |
+| `gemini-embedding-001` requests | ~1000 / day |
+| Image gen (`gemini-2.5-flash-image`) | **0 / day** |
+
+> Each story journey burns ~6 chat calls (screen, search query, story, summary, choices, image prompt). On `gemini-2.5-flash`, that's ~3 stories/day before hitting the cap. `flash-lite` is much more permissive but produces less rich prose. The default in `PROVIDER_PROFILES` is `gemini-2.5-flash-lite`; flip to `gemini-2.5-flash` once billing is enabled (see the comment in `settings.py`).
+
+**Setup:**
+1. Get a key at <https://aistudio.google.com/apikey>.
+2. Set `GEMINI_API_KEY` in `storyteller_backend/.env`.
+3. Confirm `provider: Provider = Provider.GEMINI` in `settings.py` (default).
+
+### OpenAI (paid)
+
+**Full functionality, no daily caps relevant to this app.** Per-call cost is small.
+
+| Resource | Cost |
+|---|---|
+| `gpt-4o-mini` chat | ~$0.0002 / 1K input tokens, ~$0.0006 / 1K output |
+| `text-embedding-3-small` | ~$0.00002 / 1K tokens (one-time per corpus) |
+| `dall-e-2` (256×256) | ~$0.016 / image |
+
+**Setup:**
+1. Get a key at <https://platform.openai.com/api-keys>.
+2. Set `OPENAI_API_KEY` in `storyteller_backend/.env`.
+3. In `settings.py`, set `provider: Provider = Provider.OPENAI`.
+4. Restart the backend.
+
+---
+
+## Corpora
+
+A corpus is a body of source text the storyteller draws from. Each corpus has its own vector DB (`data/chroma_db/<corpus>_<provider>/`) and BM25 index (`data/bm25_indexes/<corpus>_bm25.pkl`). The registry of corpora lives in [`data/corpus_registry.json`](data/corpus_registry.json).
+
+### Built-in corpora
+
+| Corpus | Chunks | Source |
+|---|---|---|
+| `mahabharata` | 3870 | Ancient Indian epic |
+| `arabian_nights` | 484 | Middle Eastern folk tales |
+| `locus_platform_docs` | 227 | Technical documentation example |
+| `odyssey` | 218 | Homer's Greek epic |
+| `volsunga_saga` | 106 | Norse legendary saga |
+| `jataka_tales` | 25 | Buddhist birth stories |
+
+### Building a corpus (ingestion)
+
+Ingestion = chunk the source text, generate per-chunk context summaries (LLM call, cached), embed each chunk (provider-specific, written to ChromaDB), and build a BM25 index. The pipeline is **resumable** — if interrupted (e.g. by a daily quota hit), re-running picks up where it left off.
+
+```bash
+cd storyteller_backend
+poetry run python -m embed_retrieve.build_database --corpus <name>
+
+# Or via the management CLI:
+poetry run python -m embed_retrieve.manage_corpuses build <name>
+poetry run python -m embed_retrieve.manage_corpuses list
+```
+
+Add `--force-rebuild` to rebuild even if a BM25 index already exists.
+
+**API calls used during ingestion:**
+- One **chat** call per chunk for the contextual summary (skipped if cached in `data/processed_chunks/<corpus>/`).
+- One **embedding** call per chunk (skipped if already in the target Chroma collection).
+- One BM25 build at the end (no API calls).
+
+For pre-built corpora, summaries are already cached, so re-ingesting under a new provider only costs embedding calls. At ~3 s/embedding on Gemini's 20 RPM free-tier limit:
+
+| Corpus | Embedding-only ETA |
+|---|---|
+| jataka_tales (25) | ~1.5 min |
+| volsunga_saga (106) | ~5 min |
+| odyssey (218) | ~11 min |
+| locus_platform_docs (227) | ~11 min |
+| arabian_nights (484) | ~24 min |
+| mahabharata (3870) | ~3.2 hours (will hit the 1000/day embedding cap mid-run) |
+
+### Path conventions
+
+- ChromaDB: `data/chroma_db/<corpus>_<provider>/<corpus>_chunks/`
+- BM25 (provider-agnostic): `data/bm25_indexes/<corpus>_bm25.pkl`
+
+The same `_<provider>` suffix is applied by both the build script (writer) and the retriever (reader) via the shared `embed_retrieve/paths.py` helper.
+
+### Adding a new corpus
+
+```bash
+poetry run python -m embed_retrieve.manage_corpuses add \
+  <name> "<Display Name>" "<description>" raw_texts/<source>.pdf --file-type pdf
+```
+
+This appends an entry to `data/corpus_registry.json`. Then run `build` (above) to ingest.
+
+> **Note:** the build script currently only handles **PDF** sources via PyMuPDF. Text-source corpora must have their `processed_chunks/<name>/` cache pre-populated.
+
+---
+
+## Personas
+
+Six storyteller personalities live in [`storyteller_backend/config/personas.json`](storyteller_backend/config/personas.json), each with a distinct system prompt, temperature, and color theme:
+
+- **Grandmother** — warm, gentle, nostalgic
+- **Professor** — formal, academic, contextual
+- **Extreme Summariser** — bulleted facts only, no prose
+- **HAL 9000** — calm, eerily logical, breaks the fourth wall
+- **Pirate** — boisterous, dramatic, "Aarrr!"
+- **Freud** — psychoanalytic narration
+
+The selected persona's `system_prompt` is fed to the chat model; the color theme drives the frontend styling.
+
+---
 
 ## Testing
 
 ```bash
-# Backend tests
 cd storyteller_backend
-pytest tests/ -v --cov=api --cov=services
-
-# Frontend tests (Phase 2)
-cd storyteller_frontend
-npm test
+poetry run pytest tests/ -v
 ```
 
-## Development Status
-
-### Completed (Legacy `src/` code)
-- Multi-corpus RAG system
-- LangGraph story generation agent
-- Persona system with theming
-- DALL-E 3 image generation
-- FastAPI server with SSE streaming
-- Next.js frontend with ReactFlow visualization
-
-### In Progress (Phase 1)
-- Modular backend refactoring (`storyteller_backend/`)
-- Clean service layer architecture
-- Comprehensive testing suite
-- Improved configuration management
-
-### Planned (Phase 2+)
-- Lightweight Vite + React frontend (`storyteller_frontend/`)
-- Swappable graph visualization libraries
-- Error boundaries and better error handling
-- Deployment configurations (Docker, cloud platforms)
-
-## Contributing
-
-Created by [Mehrab Modi](https://github.com/mehrabmodi)
-
-Contributions, issues, and feature requests are welcome!
-
-## License
-
-MIT License
-
-Copyright (c) 2025 Mehrab Modi
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-## Acknowledgments
-
-- Built with [LangGraph](https://github.com/langchain-ai/langgraph) and [LangChain](https://github.com/langchain-ai/langchain)
-- Image generation powered by [OpenAI DALL-E 3](https://openai.com/dall-e-3)
-- Graph visualization using [ReactFlow](https://reactflow.dev/)
-- Embeddings stored in [ChromaDB](https://www.trychroma.com/)
-- Layout algorithm by [ELK (Eclipse Layout Kernel)](https://www.eclipse.org/elk/)
+Tests cover the path helper, registry-driven build, provider profile resolution, story-generation node behavior, and screen-prompt classification. The interactive scripts in `embed_retrieve/test_*.py` are out-of-scope for pytest (they're manual smoke tests).
 
 ---
 
-*"Story is our only boat for sailing on the river of time."* - Ursula K. Le Guin
+## Architecture
 
+- **Story generation** ([`services/story_agent.py`](storyteller_backend/services/story_agent.py)) is a LangGraph state machine. Nodes: `screen_prompt → build_path_context → generate_search_query → retrieve_chunks → generate_story → update_graph_with_story → generate_choices → update_graph_with_choices`. Image generation runs in parallel as soon as enough story text streams in.
+- **Provider abstraction** ([`config/settings.py`](storyteller_backend/config/settings.py)) — a `Provider` `StrEnum` and a `ProviderProfile` dataclass map each provider to its models / RPMs / langchain provider keys. Adding a new provider = one new entry in `PROVIDER_PROFILES`.
+- **Chat model factory** ([`services/llm.py`](storyteller_backend/services/llm.py)) — `get_chat_llm()` is the single construction site for chat models. It applies `thinking_budget=0` for Gemini automatically (without it, `gemini-2.5-flash` consumes the entire output budget on internal reasoning, producing ~40-word truncated stories instead of 700-word ones).
+- **Retrieval** is hybrid: top-K BM25 + top-K vector search (Reciprocal Rank Fusion). See [`embed_retrieve/retriever.py`](storyteller_backend/embed_retrieve/retriever.py).
+
+For a deeper dive, see [`documentation/MANUAL_SETUP.md`](documentation/MANUAL_SETUP.md) and [`documentation/next_steps.md`](documentation/next_steps.md).
+
+---
+
+## Contributing
+
+Created by [Mehrab Modi](https://github.com/mehrabmodi). Issues and PRs welcome.
+
+## License
+
+MIT — Copyright (c) 2025 Mehrab Modi. See full notice at end of file.
+
+## Acknowledgments
+
+- [LangGraph](https://github.com/langchain-ai/langgraph) and [LangChain](https://github.com/langchain-ai/langchain)
+- [ChromaDB](https://www.trychroma.com/) for embedded vector storage
+- [ReactFlow](https://reactflow.dev/) for graph visualization
+- [ELK](https://www.eclipse.org/elk/) for graph layout
+- OpenAI [DALL·E 2](https://openai.com/dall-e-2) and Google [Gemini](https://ai.google.dev/) image generation
+
+---
+
+*"Story is our only boat for sailing on the river of time."* — Ursula K. Le Guin
+
+---
+
+<details>
+<summary>MIT License (full text)</summary>
+
+Copyright (c) 2025 Mehrab Modi
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+</details>

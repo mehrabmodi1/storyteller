@@ -1,6 +1,44 @@
 # Storyteller Project: Current Status & Next Steps
 
-**Last Updated:** November 23, 2025
+**Last Updated:** May 3, 2026
+
+---
+
+## 📍 CURRENT STATUS (May 2026)
+
+This document was originally drafted in November 2025 as a Phase 1/2/3 roadmap. Most of that work is now complete or has been superseded. **Treat the section below as authoritative; everything beyond it is a historical snapshot kept for context.**
+
+### What's done
+
+- **Modular backend** (`storyteller_backend/`) — FastAPI + LangGraph + ChromaDB, Poetry-managed, 11 API endpoints, SSE streaming, full CRUD on personas/corpuses/journeys, 41-test pytest suite, 6 personas, 6 corpora.
+- **Frontend** (`storyteller_frontend/`) — React 18 + Vite + ReactFlow + Tailwind. Story graph, SSE streaming, choice interactions, persona/corpus dropdowns, ELK layout, journey save/load all working. (Earlier docs called this "Phase 2 - Coming Soon"; that's stale.)
+- **Provider abstraction** — `Provider` enum + `ProviderProfile` dataclass keyed map in `config/settings.py`. Switching between Gemini and OpenAI is one line. Each provider's chat / embedding / image model + RPM bundled in one place.
+- **Build/retrieve unification** — both `embed_retrieve/build_database.py` and `embed_retrieve/retriever.py` resolve paths through a shared helper (`embed_retrieve/paths.py`). Per-corpus, provider-suffixed layout: `data/chroma_db/<corpus>_<provider>/<corpus>_chunks/`. No more legacy single-root layout.
+- **Gemini support** — chat (`gemini-2.5-flash-lite` default, `flash` available), embeddings (`gemini-embedding-001`), image gen (`gemini-2.5-flash-image`, paid tier only). `thinking_budget=0` applied automatically via `services/llm.py:get_chat_llm()` to prevent gemini-2.5-flash from consuming the entire output budget on internal reasoning.
+- **Resilient corpus build pipeline** — rate-limited, retried, batch upserts, resumable across daily-quota interruptions.
+- **Corpus migration to per-provider layout** — all six corpora's existing OpenAI data renamed `<corpus>_openai/`. Five of six rebuilt under Gemini (arabian_nights paused at 400/484 by daily embedding cap, will resume on next run).
+
+### What's open
+
+- **arabian_nights Gemini embeddings** — 84 chunks remaining; resume with `poetry run python -m embed_retrieve.build_database --corpus arabian_nights --force-rebuild`.
+- **Image generation on Gemini free tier** — quota is 0/day, so journeys get no images while Gemini billing is disabled. Story generation is unaffected. Three options for later: (a) enable Gemini billing, (b) decouple `image_provider` from `chat_provider` and route images to OpenAI/DALL-E, (c) integrate a free third-party image API (e.g. Pollinations.ai).
+- **Reflex admin panel** (Phase 3 in original plan) — not started; CRUD endpoints exist on the backend but no admin UI was built. May not be needed depending on future direction.
+- **Per-request-key auth mode** (Phase 2+ in original plan) — `auth_mode` field in `Config` exists but only `self_hosted` is wired. The other modes (`per_request_key`, `credit_system`) are scaffolding only.
+- **Build script: PDF-only.** Text-source corpora must already have a populated `data/processed_chunks/<name>/` cache (true for all current corpora). Adding text-source ingestion is straightforward but out of scope so far.
+
+### Recently retired / superseded
+
+- The original "Phase 1 / 2 / 3" framing — both Phase 1 (backend refactor) and Phase 2 (frontend) are essentially done. Treat them as history.
+- The old `src/` directory (legacy Next.js + agent code) — gone.
+- FAISS — never adopted; the project has always used ChromaDB plus a separate BM25 index.
+- The "DALL-E 3" mention in old docs — actually `dall-e-2`.
+- `documentation/MANUAL_SETUP.md` — replaced (May 2026) with an architecture-focused developer guide. The setup steps now live in the [README](../README.md).
+
+For the up-to-date setup walkthrough, see the [README](../README.md). For deeper architectural detail, see [`MANUAL_SETUP.md`](MANUAL_SETUP.md).
+
+---
+
+> **Below this line: historical roadmap snapshot from November 2025.** Kept for context — design rationale, decisions taken, alternatives considered. Specifics about file layouts, tech choices, and "next phase" framing may not match current state.
 
 ---
 
