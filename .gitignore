@@ -4,6 +4,7 @@
 .env
 .DS_Store
 .cursor/
+.superpowers/
 raw_texts/
 __pycache__/
 *.py[cod]

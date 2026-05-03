@@ -27,6 +27,7 @@ langchain-google-genai = "2.1.12"
 google-genai = "^1.68.0"
 pymupdf = "^1.27.2.2"
 pip-system-certs = "^5.3"
+gdown = "^6.0.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "8.3.4"

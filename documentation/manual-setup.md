@@ -111,23 +111,31 @@ This downloads JavaScript packages. Also a few minutes the first time.
 
 ## 5. Drop in the pre-built corpus data
 
-Locate the corpus folder you downloaded — call it `<corpus-folder>`. It should contain something like:
+### Where to download
+
+Pre-built corpus embeddings (Chroma vectors, BM25 indexes, chunk caches, and registry) are hosted on Google Drive:
+
+**[Storyteller corpus data — Google Drive](https://drive.google.com/drive/folders/1iidSrv-En0VMZSNoDGswP1G_Tm3Amstw?usp=sharing)**
+
+Download the folder (or its individual subfolders) to your machine. The contents look like:
 
 ```
-<corpus-folder>/
+<download>/
 ├── chroma_db/
 ├── bm25_indexes/
 ├── processed_chunks/
 └── corpus_registry.json
 ```
 
-Copy everything inside it into the repo's `data/` directory:
+### Where to put it
+
+Copy everything inside the downloaded folder into the repo's `data/` directory:
 
 ```bash
-cp -R <corpus-folder>/. <path-to-cloned-repo>/data/
+cp -R <download>/. <path-to-cloned-repo>/data/
 ```
 
-> Replace `<corpus-folder>` with the actual download path, e.g. `~/Downloads/storyteller_data`.
+> Replace `<download>` with the actual download path, e.g. `~/Downloads/storyteller_data`.
 
 ### Add the provider suffix to chroma folders (if needed)
 
