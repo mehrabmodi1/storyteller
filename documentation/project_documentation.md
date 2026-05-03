@@ -1,8 +1,8 @@
-# Storyteller — Architecture & Developer Guide
+# Storyteller — Project Documentation
 
-This document is a deeper companion to the [README](../README.md). The README covers how to run the app; this doc covers **how the system is put together**: the layers, the data flow, the conventions, and the extension points. Read this if you intend to modify backend code, add a provider, ingest a new corpus, or debug an unusual failure.
+This is the developer-and-architecture reference: how the system is put together — the layers, the data flow, the conventions, and the extension points. Read this if you intend to modify backend code, add a provider, ingest a new corpus, or debug an unusual failure.
 
-For setup instructions (Poetry, npm, `.env`, run commands), see the [README Quick Start](../README.md#quick-start).
+For step-by-step instructions to *install and run* the app (assuming a clone + a downloaded corpus snapshot), see [`manual-setup.md`](manual-setup.md). For a higher-level project overview, see the [README](../README.md).
 
 ---
 

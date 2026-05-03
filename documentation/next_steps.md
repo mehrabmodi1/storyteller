@@ -32,9 +32,9 @@ This document was originally drafted in November 2025 as a Phase 1/2/3 roadmap. 
 - The old `src/` directory (legacy Next.js + agent code) — gone.
 - FAISS — never adopted; the project has always used ChromaDB plus a separate BM25 index.
 - The "DALL-E 3" mention in old docs — actually `dall-e-2`.
-- `documentation/MANUAL_SETUP.md` — replaced (May 2026) with an architecture-focused developer guide. The setup steps now live in the [README](../README.md).
+- `documentation/MANUAL_SETUP.md` — split (May 2026) into [`manual-setup.md`](manual-setup.md) (non-technical step-by-step install) and [`project_documentation.md`](project_documentation.md) (developer / architecture reference).
 
-For the up-to-date setup walkthrough, see the [README](../README.md). For deeper architectural detail, see [`MANUAL_SETUP.md`](MANUAL_SETUP.md).
+For the up-to-date setup walkthrough, see [`manual-setup.md`](manual-setup.md). For deeper architectural detail, see [`project_documentation.md`](project_documentation.md).
 
 ---
 

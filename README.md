@@ -49,8 +49,9 @@ storyteller/
 ├── raw_texts/              # Source PDFs / text files (gitignored)
 ├── saved_graphs/           # User journey JSONs (gitignored)
 ├── documentation/
-│   ├── MANUAL_SETUP.md
-│   └── next_steps.md
+│   ├── manual-setup.md         # Step-by-step install guide (non-technical users)
+│   ├── project_documentation.md # Architecture & developer reference
+│   └── next_steps.md           # Historical roadmap + current status
 └── CLAUDE.md               # Developer guide for AI assistants
 ```
 
@@ -247,7 +248,7 @@ Tests cover the path helper, registry-driven build, provider profile resolution,
 - **Chat model factory** ([`services/llm.py`](storyteller_backend/services/llm.py)) — `get_chat_llm()` is the single construction site for chat models. It applies `thinking_budget=0` for Gemini automatically (without it, `gemini-2.5-flash` consumes the entire output budget on internal reasoning, producing ~40-word truncated stories instead of 700-word ones).
 - **Retrieval** is hybrid: top-K BM25 + top-K vector search (Reciprocal Rank Fusion). See [`embed_retrieve/retriever.py`](storyteller_backend/embed_retrieve/retriever.py).
 
-For a deeper dive, see [`documentation/MANUAL_SETUP.md`](documentation/MANUAL_SETUP.md) and [`documentation/next_steps.md`](documentation/next_steps.md).
+For a deeper dive, see [`documentation/project_documentation.md`](documentation/project_documentation.md). For a fully step-by-step installation walkthrough (assumes a downloaded corpus snapshot), see [`documentation/manual-setup.md`](documentation/manual-setup.md). For historical project plans, see [`documentation/next_steps.md`](documentation/next_steps.md).
 
 ---
 
