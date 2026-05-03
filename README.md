@@ -68,29 +68,25 @@ storyteller/
   - **[Gemini](https://aistudio.google.com/apikey)** — free tier, no card required (recommended for first-time setup)
   - **[OpenAI](https://platform.openai.com/api-keys)** — paid, full functionality (images included)
 
-### 1. Backend setup
+### One-command install
+
+From the repo root:
 
 ```bash
-cd storyteller_backend
-poetry install
-
-# Configure secrets
-cp .env.example .env
-# Edit .env and set GEMINI_API_KEY (and/or OPENAI_API_KEY)
+python3 setup.py
 ```
+
+The script verifies your prerequisites, prompts you for a provider, walks you through adding your API key to `.env`, installs backend + frontend dependencies, downloads the pre-built corpus data from Google Drive, and runs a smoke test. Re-running is safe and idempotent.
+
+Useful flags: `--dry-run` (no settings/data changes), `--force` (re-download corpus data).
+
+For a step-by-step manual fallback, see [`documentation/manual-setup.md`](documentation/manual-setup.md).
 
 > **Important:** dependencies are managed by Poetry. Do **not** run `pip install` — version drift in `chromadb` will silently destroy embedded vector data.
 
-### 2. Frontend setup
+### Run the app
 
-```bash
-cd storyteller_frontend
-npm install
-```
-
-### 3. Run
-
-In two terminals:
+When `setup.py` finishes, open two terminals:
 
 ```bash
 # Terminal 1 — backend (port 8000)

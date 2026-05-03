@@ -1,223 +1,117 @@
-# Storyteller — Manual Setup
+# Storyteller — Setup
 
-A step-by-step guide to install and run Storyteller on your machine.
+A guide to install and run Storyteller on your machine.
 
-**This guide assumes:**
-- You've already cloned the repository.
-- You have a folder of pre-built corpus data downloaded somewhere on your computer (typically a `storyteller_data` archive shared by the maintainer, containing `chroma_db/`, `bm25_indexes/`, etc.).
+This guide assumes you've already cloned the repository.
 
 For project architecture and developer-level documentation, see [`project_documentation.md`](project_documentation.md).
 
 ---
 
-## 1. Install prerequisites
+## Recommended: one-command install
 
-You need three things on your machine. Skip any you already have.
+A setup script handles dependency install, corpus download, and smoke-test in a single run. Most users should use this path.
+
+### 1. Install prerequisites
+
+You need three things installed already:
 
 - **Python 3.12 or later** — [download](https://www.python.org/downloads/)
 - **Poetry 2.x** (Python's dependency manager) — [install instructions](https://python-poetry.org/docs/#installation)
 - **Node.js 18 or later** — [download](https://nodejs.org/)
 
-Verify each in a terminal:
+The script will fail fast and tell you which one is missing if any are not on PATH.
+
+### 2. Run the setup script
+
+From the cloned repo's root directory:
 
 ```bash
-python3 --version    # 3.12.x or higher
-poetry --version     # Poetry (version 2.x.x)
-node --version       # v18.x.x or higher
+python3 setup.py
 ```
 
-If any command isn't found, finish installing it before continuing.
+The script will:
 
----
+1. Verify the prerequisites are present.
+2. Ask which provider you want (Gemini free / OpenAI paid).
+3. Prompt you to add your API key to `storyteller_backend/.env`. **You write the key yourself in your editor of choice — the script never handles it.** It then verifies the key is set before proceeding.
+4. Update `config/settings.py` to your chosen provider (if needed).
+5. Run `poetry install` (backend) and `npm install` (frontend).
+6. Download the pre-built corpus data from Google Drive into `data/`.
+7. Run a smoke test: load the Mahabharata corpus through the retriever and report its vector count.
 
-## 2. Get an API key
+The script is idempotent — re-running is safe and skips work that's already done.
 
-Storyteller needs at least one provider key. Pick **one** option:
+### Useful flags
 
-### Option A — Gemini (free tier, no credit card)
+- `--dry-run` — show what would happen without editing `settings.py`, downloading, or running the smoke test. (Dependency installs still run; they're idempotent.)
+- `--force` — re-download corpus data even if `data/` is already populated.
 
-1. Visit <https://aistudio.google.com/apikey>
-2. Click **Create API key**
-3. Copy the key somewhere safe — you'll paste it in the next step.
+### 3. Run the app
 
-### Option B — OpenAI (paid, full features including images)
-
-1. Visit <https://platform.openai.com/api-keys>
-2. Click **Create new secret key**
-3. Copy the key.
-
----
-
-## 3. Configure the API key
-
-Open a terminal and navigate into the cloned repo:
+When the script finishes, open two terminals:
 
 ```bash
-cd <path-to-cloned-repo>/storyteller_backend
+# Terminal 1 — backend (port 8000)
+cd storyteller_backend && poetry run python -m api.main
+
+# Terminal 2 — frontend (port 3000)
+cd storyteller_frontend && npm run dev
+```
+
+Open <http://localhost:3000> in your browser.
+
+---
+
+## Manual fallback
+
+If the setup script doesn't work for you (e.g. corporate network blocking Google Drive, or you'd rather do each step yourself), follow these:
+
+### A. Configure your API key
+
+```bash
+cd <repo>/storyteller_backend
 cp .env.example .env
 ```
 
-Open `.env` in any text editor. You'll see:
+Open `.env` and set:
+- `GEMINI_API_KEY=<your key>` — get one from <https://aistudio.google.com/apikey>, **or**
+- `OPENAI_API_KEY=sk-<your key>` — get one from <https://platform.openai.com/api-keys>
 
-```
-GEMINI_API_KEY=your-gemini-api-key-here
-# OPENAI_API_KEY=sk-your-openai-api-key-here
-```
+If you chose OpenAI, also edit `storyteller_backend/config/settings.py` and change `provider: Provider = Provider.GEMINI` to `Provider.OPENAI`.
 
-- **If you're using Gemini:** replace `your-gemini-api-key-here` with the key from step 2.
-- **If you're using OpenAI:** delete the `#` at the start of the second line, then replace `sk-your-openai-api-key-here` with your key.
-
-Save and close the file.
-
-### If you chose OpenAI, also switch the active provider
-
-Open `storyteller_backend/config/settings.py` in a text editor. Near the top of the `Config` class, find:
-
-```python
-provider: Provider = Provider.GEMINI
-```
-
-Change it to:
-
-```python
-provider: Provider = Provider.OPENAI
-```
-
-Save the file.
-
----
-
-## 4. Install dependencies
-
-### Backend
+### B. Install dependencies
 
 ```bash
-cd <path-to-cloned-repo>/storyteller_backend
-poetry install
+cd <repo>/storyteller_backend && poetry install
+cd <repo>/storyteller_frontend && npm install
 ```
 
-This downloads all Python packages. The first run takes a couple of minutes.
+### C. Download corpus data
 
-### Frontend
+Manually download from **[Storyteller corpus data — Google Drive](https://drive.google.com/drive/folders/1iidSrv-En0VMZSNoDGswP1G_Tm3Amstw?usp=sharing)** and copy the contents into `<repo>/data/`. After copying, the directory should contain `chroma_db/`, `bm25_indexes/`, `processed_chunks/`, and `corpus_registry.json`.
 
-```bash
-cd <path-to-cloned-repo>/storyteller_frontend
-npm install
-```
+### D. Run the app
 
-This downloads JavaScript packages. Also a few minutes the first time.
-
----
-
-## 5. Drop in the pre-built corpus data
-
-### Where to download
-
-Pre-built corpus embeddings (Chroma vectors, BM25 indexes, chunk caches, and registry) are hosted on Google Drive:
-
-**[Storyteller corpus data — Google Drive](https://drive.google.com/drive/folders/1iidSrv-En0VMZSNoDGswP1G_Tm3Amstw?usp=sharing)**
-
-Download the folder (or its individual subfolders) to your machine. The contents look like:
-
-```
-<download>/
-├── chroma_db/
-├── bm25_indexes/
-├── processed_chunks/
-└── corpus_registry.json
-```
-
-### Where to put it
-
-Copy everything inside the downloaded folder into the repo's `data/` directory:
-
-```bash
-cp -R <download>/. <path-to-cloned-repo>/data/
-```
-
-> Replace `<download>` with the actual download path, e.g. `~/Downloads/storyteller_data`.
-
-### Add the provider suffix to chroma folders (if needed)
-
-Look inside `data/chroma_db/`. If you see folders **without** an `_openai` or `_gemini` suffix:
-
-```
-data/chroma_db/mahabharata
-data/chroma_db/odyssey
-...
-```
-
-…they need to be renamed to match your provider. Run **one** of these (the matching one for your provider):
-
-**For OpenAI:**
-```bash
-cd <path-to-cloned-repo>/data/chroma_db
-for c in arabian_nights jataka_tales locus_platform_docs mahabharata odyssey volsunga_saga; do
-  mv "$c" "${c}_openai"
-done
-```
-
-**For Gemini:**
-```bash
-cd <path-to-cloned-repo>/data/chroma_db
-for c in arabian_nights jataka_tales locus_platform_docs mahabharata odyssey volsunga_saga; do
-  mv "$c" "${c}_gemini"
-done
-```
-
-If the folder names already end in `_openai` or `_gemini`, you can skip this step.
-
----
-
-## 6. Run Storyteller
-
-You'll need **two** terminal windows (or two tabs) — one for the backend, one for the frontend.
-
-### Terminal 1 — backend
-
-```bash
-cd <path-to-cloned-repo>/storyteller_backend
-poetry run python -m api.main
-```
-
-You should see `Application startup complete` and the server listening on port 8000.
-
-### Terminal 2 — frontend
-
-```bash
-cd <path-to-cloned-repo>/storyteller_frontend
-npm run dev
-```
-
-You should see Vite report `Local: http://localhost:3000`.
-
----
-
-## 7. Open the app
-
-Open your web browser and go to:
-
-**<http://localhost:3000>**
-
-You should see the Storyteller UI. Pick a corpus, pick a persona, type a prompt, and submit. The story should stream in within a few seconds.
+Same as step 3 above.
 
 ---
 
 ## Troubleshooting
 
-**Backend exits with `GEMINI_API_KEY is required` (or `OPENAI_API_KEY`):**
-The `.env` file is missing the right key. Re-check step 3.
+**`GEMINI_API_KEY is required` (or `OPENAI_API_KEY`):**
+The `.env` file is missing the key, or you set the wrong provider's key. Re-check section A.
 
-**Backend logs `Collection [<corpus>_chunks] does not exist` when you submit a prompt:**
-The chroma folder for that corpus is missing or has the wrong name. Re-check step 5 — folder names must end in `_openai` or `_gemini` matching your provider.
+**`Collection [<corpus>_chunks] does not exist` when submitting a story:**
+The chroma folder layout doesn't match the active provider. Inspect `data/chroma_db/` — folders should end in `_openai` or `_gemini` matching what `config/settings.py` is set to. The setup script handles this on download; for manual installs, the Drive snapshot is laid out for the default provider, so this only comes up if you switched providers without re-downloading.
 
 **Frontend shows "Network Error" when submitting:**
-The backend isn't running, or isn't on port 8000. Check Terminal 1.
+Backend isn't running, or isn't on port 8000. Check Terminal 1.
 
-**Backend logs a `429` quota error mid-story (Gemini only):**
-You've hit Gemini's free-tier daily cap. Wait until tomorrow, enable billing on your Google project, or switch to OpenAI (see step 3).
+**`429` quota error mid-story (Gemini only):**
+You've hit Gemini's free-tier daily cap. Wait until tomorrow, enable billing on your Google project, or switch to OpenAI.
 
 **Stories generate but no images appear (Gemini only):**
-Image generation on Gemini's free tier is disabled by Google (quota = 0). Either enable Gemini billing, or switch the provider to OpenAI for full functionality. Story text generation still works fine without images.
+Image generation is paywalled on Gemini's free tier. Either enable Gemini billing or switch the provider to OpenAI for full functionality. Story text generation still works fine.
 
 For deeper troubleshooting and architectural detail, see [`project_documentation.md`](project_documentation.md).
